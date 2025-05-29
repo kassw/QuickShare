@@ -1,0 +1,191 @@
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 240 7% 11%; /* #12111c */
+  --foreground: 0 0% 98%;
+  --muted: 240 3.7% 15.9%;
+  --muted-foreground: 240 5% 64.9%;
+  --popover: 240 7% 11%;
+  --popover-foreground: 0 0% 98%;
+  --card: 240 7% 11%;
+  --card-foreground: 0 0% 98%;
+  --border: 240 3.7% 15.9%;
+  --input: 240 3.7% 15.9%;
+  --primary: 125 87% 45%; /* #34d415 */
+  --primary-foreground: 240 7% 11%;
+  --secondary: 240 3.7% 15.9%;
+  --secondary-foreground: 0 0% 98%;
+  --accent: 240 3.7% 15.9%;
+  --accent-foreground: 0 0% 98%;
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 60 9.1% 97.8%;
+  --ring: 240 4.9% 83.9%;
+  --radius: 0.5rem;
+  
+  /* Custom retro colors */
+  --neon-green: 125 87% 45%; /* #34d415 */
+  --retro-dark: 240 7% 11%; /* #12111c */
+  --retro-red: 0 84.2% 60.2%; /* #ff6b6b */
+  --retro-cyan: 180 65% 55%; /* #4ecdc4 */
+  --retro-purple: 240 30% 25%; /* #2c2c54 */
+}
+
+.dark {
+  --background: 240 7% 11%;
+  --foreground: 0 0% 98%;
+  --muted: 240 3.7% 15.9%;
+  --muted-foreground: 240 5% 64.9%;
+  --popover: 240 7% 11%;
+  --popover-foreground: 0 0% 98%;
+  --card: 240 7% 11%;
+  --card-foreground: 0 0% 98%;
+  --border: 240 3.7% 15.9%;
+  --input: 240 3.7% 15.9%;
+  --primary: 125 87% 45%;
+  --primary-foreground: 240 7% 11%;
+  --secondary: 240 3.7% 15.9%;
+  --secondary-foreground: 0 0% 98%;
+  --accent: 240 3.7% 15.9%;
+  --accent-foreground: 0 0% 98%;
+  --destructive: 0 62.8% 30.6%;
+  --destructive-foreground: 0 0% 98%;
+  --ring: 240 4.9% 83.9%;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-mono antialiased;
+    font-family: 'Press Start 2P', monospace;
+  }
+  
+  html {
+    font-size: 14px;
+  }
+}
+
+@layer utilities {
+  .font-pixel {
+    font-family: 'Press Start 2P', monospace;
+  }
+  
+  .text-neon-green {
+    color: hsl(var(--neon-green));
+  }
+  
+  .bg-neon-green {
+    background-color: hsl(var(--neon-green));
+  }
+  
+  .border-neon-green {
+    border-color: hsl(var(--neon-green));
+  }
+  
+  .text-retro-dark {
+    color: hsl(var(--retro-dark));
+  }
+  
+  .bg-retro-dark {
+    background-color: hsl(var(--retro-dark));
+  }
+  
+  .text-retro-red {
+    color: hsl(var(--retro-red));
+  }
+  
+  .bg-retro-red {
+    background-color: hsl(var(--retro-red));
+  }
+  
+  .text-retro-cyan {
+    color: hsl(var(--retro-cyan));
+  }
+  
+  .bg-retro-cyan {
+    background-color: hsl(var(--retro-cyan));
+  }
+  
+  .text-retro-purple {
+    color: hsl(var(--retro-purple));
+  }
+  
+  .bg-retro-purple {
+    background-color: hsl(var(--retro-purple));
+  }
+  
+  .animate-pulse-neon {
+    animation: pulse-neon 2s ease-in-out infinite alternate;
+  }
+  
+  .animate-float {
+    animation: float 3s ease-in-out infinite;
+  }
+  
+  .animate-glow {
+    animation: glow 2s ease-in-out infinite alternate;
+  }
+}
+
+@keyframes pulse-neon {
+  0% {
+    box-shadow: 0 0 5px hsl(var(--neon-green)), 0 0 10px hsl(var(--neon-green)), 0 0 15px hsl(var(--neon-green));
+  }
+  100% {
+    box-shadow: 0 0 10px hsl(var(--neon-green)), 0 0 20px hsl(var(--neon-green)), 0 0 30px hsl(var(--neon-green));
+  }
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes glow {
+  0% {
+    text-shadow: 0 0 5px hsl(var(--neon-green));
+  }
+  100% {
+    text-shadow: 0 0 10px hsl(var(--neon-green)), 0 0 20px hsl(var(--neon-green));
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: hsl(var(--retro-dark));
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--neon-green));
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--neon-green) / 0.8);
+}
+
+/* Responsive font sizes */
+@media (max-width: 640px) {
+  html {
+    font-size: 12px;
+  }
+}
+
+@media (min-width: 1024px) {
+  html {
+    font-size: 16px;
+  }
+}
