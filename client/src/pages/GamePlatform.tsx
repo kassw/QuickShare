@@ -387,14 +387,14 @@ export default function GamePlatform() {
                       >
                         <CardContent className="p-6 text-center">
                           <div className="mb-4">
-                            <div className="w-full h-32 bg-retro-dark rounded-lg mb-4 flex items-center justify-center">
+                            <div className="w-full  bg-retro-dark rounded-lg mb-4 flex items-center justify-center">
                               <Gamepad2 className={`text-${data.color} text-4xl`} />
                             </div>
                           </div>
                           <h4 className={`font-pixel text-${data.color} text-sm mb-2`}>
                             {data.title}
                           </h4>
-                          <p className="text-xs text-gray-400 mb-4">{data.description}</p>
+                          
                           <div className="flex justify-between items-center text-xs">
                             <span className="text-gray-400">
                               Online: <span className={`text-${data.color}`}>{data.onlineCount}</span>
