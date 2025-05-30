@@ -374,7 +374,7 @@ export default function GamePlatform() {
                 <h3 className="font-pixel text-xl text-neon-green mb-6 text-center">
                   Choose Your Game
                 </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-6">
                   {Object.entries(gameData).map(([gameType, data]) => (
                     <motion.div
                       key={gameType}
@@ -399,9 +399,9 @@ export default function GamePlatform() {
                             <span className="text-gray-400">
                               Online: <span className={`text-${data.color}`}>{data.onlineCount}</span>
                             </span>
-                            <span className="text-gray-400">
+                            {/*    <span className="text-gray-400">
                               Min: <span className={`text-${data.color}`}>{data.minStake} USDT</span>
-                            </span>
+                            </span>*/}
                           </div>
                         </CardContent>
                       </Card>
