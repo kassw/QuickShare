@@ -532,7 +532,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // Next player: since player2 starts first, after each move we alternate
     // After move 0 (player2): player1 goes next
     // After move 1 (player1): player2 goes next
-    const nextPlayer = finished ? null : (allMoves.length % 2 === 0 ? player1Id : player2Id);
+    const nextPlayer = finished ? null : (allMoves.length % 2 === 0 ? player2Id : player1Id);
 
     return {
       finished,
@@ -574,7 +574,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     // Next player: since player2 starts first, after each move we alternate
-    const nextPlayer = allMoves.length % 2 === 0 ? player1Id : player2Id;
+    const nextPlayer = allMoves.length % 2 === 0 ? player2Id : player1Id;
 
     return {
       finished: false,
@@ -615,7 +615,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const failed = wrongGuesses >= 6;
 
     // Next player: since player2 starts first, after each move we alternate
-    const nextPlayer = (isComplete || failed) ? null : (allMoves.length % 2 === 0 ? player1Id : player2Id);
+    const nextPlayer = (isComplete || failed) ? null : (allMoves.length % 2 === 0 ? player2Id : player1Id);
 
     let winnerId = null;
     if (isComplete) {
