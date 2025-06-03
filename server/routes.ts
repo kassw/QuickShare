@@ -291,14 +291,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   }
 
   function broadcastToMatch(matchId: string, message: WSMessage) {
-    for (const [userId, userMatchId] of userMatches.entries()) {
+    Array.from(userMatches.entries()).forEach(([userId, userMatchId]) => {
       if (userMatchId === matchId) {
-        const client = connectedClients.get(userId);
-        if (client && client.readyState === WebSocket.OPEN) {
-          client.send(JSON.stringify(message));
+        const connectionId = userConnections.get(userId);
+        if (connectionId) {
+          const client = connectedClients.get(connectionId);
+          if (client && client.readyState === WebSocket.OPEN) {
+            client.send(JSON.stringify(message));
+          }
         }
       }
-    }
+    });
   }
 
   function initializeGameState(gameType: string) {
@@ -321,137 +324,147 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   }
 
-  async function processGameMove(match: any, move: any, allMoves: any[]) {
-    const moveData = JSON.parse(move.moveData);
+  async function processGameMove(match: any, move: any, allMoves: any[], playerId: string) {
     const gameType = match.gameType;
     
     switch (gameType) {
       case 'rps':
-        return processRPSMove(match, moveData, allMoves);
+        return processRPSMove(match, move, allMoves, playerId);
       case 'tictactoe':
-        return processTicTacToeMove(match, moveData, allMoves);
+        return processTicTacToeMove(match, move, allMoves, playerId);
       case 'sticks':
-        return processSticksMove(match, moveData, allMoves);
+        return processSticksMove(match, move, allMoves, playerId);
       case 'hangman':
-        return processHangmanMove(match, moveData, allMoves);
+        return processHangmanMove(match, move, allMoves, playerId);
       default:
         return { finished: false, gameState: {}, winnerId: null };
     }
   }
 
-  function processRPSMove(match: any, moveData: any, allMoves: any[]) {
-    const moves = { [guestUser.id]: moveData.move };
-    
-    // Simulate opponent move (simple AI)
-    const rpsOptions = ['rock', 'paper', 'scissors'];
-    const opponentMove = rpsOptions[Math.floor(Math.random() * 3)];
-    const opponentId = match.player1Id === guestUser.id ? match.player2Id : match.player1Id;
-    moves[opponentId || 'ai'] = opponentMove;
-    
-    const result = evaluateRPS(moveData.move, opponentMove);
-    let winnerId = null;
-    
-    if (result === 'win') winnerId = guestUser.id;
-    else if (result === 'lose') winnerId = opponentId;
-    
-    return {
-      finished: true,
-      gameState: { moves, result },
-      winnerId
-    };
-  }
-
-  function processTicTacToeMove(match: any, moveData: any, allMoves: any[]) {
-    const board = Array(9).fill(null);
-    
-    // Apply all moves
-    allMoves.forEach((move, index) => {
-      const data = JSON.parse(move.moveData);
-      board[data.position] = index % 2 === 0 ? 'X' : 'O';
-    });
-    
-    // Add current move
-    board[moveData.position] = allMoves.length % 2 === 0 ? 'X' : 'O';
-    
-    const winner = checkTicTacToeWinner(board);
-    const finished = winner !== null || !board.includes(null);
-    
-    // Simple AI move if game not finished
-    if (!finished) {
-      const emptyCells = board.map((cell, i) => cell === null ? i : null).filter(i => i !== null);
-      if (emptyCells.length > 0) {
-        const aiMove = emptyCells[Math.floor(Math.random() * emptyCells.length)];
-        board[aiMove] = 'O';
-      }
-    }
-    
-    const finalWinner = checkTicTacToeWinner(board);
-    
-    return {
-      finished: finalWinner !== null || !board.includes(null),
-      gameState: { board, currentPlayer: finalWinner ? null : (allMoves.length + 1) % 2 === 0 ? 'X' : 'O' },
-      winnerId: finalWinner === 'X' ? guestUser.id : finalWinner === 'O' ? match.player2Id : null
-    };
-  }
-
-  function processSticksMove(match: any, moveData: any, allMoves: any[]) {
-    let sticks = 21;
-    
-    // Apply all previous moves
+  function processRPSMove(match: any, moveData: any, allMoves: any[], playerId: string) {
+    // Build current state from all moves
+    const playerMoves: Record<string, string> = {};
     allMoves.forEach(move => {
       const data = JSON.parse(move.moveData);
-      sticks -= data.take;
+      playerMoves[move.playerId] = data.move;
     });
+
+    // Check if both players have moved
+    const player1Id = match.player1Id;
+    const player2Id = match.player2Id;
     
-    // Apply current move
-    sticks -= moveData.take;
-    
-    if (sticks <= 0) {
-      // Current player loses (took last stick)
+    if (player1Id && player2Id && playerMoves[player1Id] && playerMoves[player2Id]) {
+      const move1 = playerMoves[player1Id];
+      const move2 = playerMoves[player2Id];
+      
+      const result = evaluateRPS(move1, move2);
+      let winnerId = null;
+      
+      if (result === 'player1') winnerId = player1Id;
+      else if (result === 'player2') winnerId = player2Id;
+      
       return {
         finished: true,
-        gameState: { sticks: 0, currentPlayer: null },
-        winnerId: match.player1Id === guestUser.id ? match.player2Id : match.player1Id
-      };
-    }
-    
-    // AI move
-    const aiTake = Math.min(Math.max(1, Math.floor(Math.random() * 3) + 1), sticks);
-    sticks -= aiTake;
-    
-    if (sticks <= 0) {
-      // AI loses
-      return {
-        finished: true,
-        gameState: { sticks: 0, currentPlayer: null },
-        winnerId: guestUser.id
+        gameState: { moves: playerMoves, result, move1, move2 },
+        winnerId
       };
     }
     
     return {
       finished: false,
-      gameState: { sticks, currentPlayer: 1 },
+      gameState: { moves: playerMoves, waitingFor: !playerMoves[player1Id] ? player1Id : player2Id },
       winnerId: null
     };
   }
 
-  function processHangmanMove(match: any, moveData: any, allMoves: any[]) {
-    const gameState = JSON.parse(match.gameData || '{}');
-    const word = gameState.word || 'BLOCKCHAIN';
-    const guessedLetters = [...(gameState.guessedLetters || []), moveData.letter];
-    let wrongGuesses = gameState.wrongGuesses || 0;
+  function processTicTacToeMove(match: any, moveData: any, allMoves: any[], playerId: string) {
+    const board = Array(9).fill(null);
+    const player1Id = match.player1Id;
+    const player2Id = match.player2Id;
     
-    if (!word.includes(moveData.letter)) {
-      wrongGuesses++;
+    // Apply all moves to board
+    allMoves.forEach(move => {
+      const data = JSON.parse(move.moveData);
+      const symbol = move.playerId === player1Id ? 'X' : 'O';
+      board[data.position] = symbol;
+    });
+    
+    const winner = checkTicTacToeWinner(board);
+    const finished = winner !== null || !board.includes(null);
+    
+    let winnerId = null;
+    if (winner === 'X') winnerId = player1Id;
+    else if (winner === 'O') winnerId = player2Id;
+    
+    return {
+      finished,
+      gameState: { 
+        board, 
+        currentPlayer: allMoves.length % 2 === 0 ? 'X' : 'O',
+        winner 
+      },
+      winnerId
+    };
+  }
+
+  function processSticksMove(match: any, moveData: any, allMoves: any[], playerId: string) {
+    let sticks = 21;
+    const player1Id = match.player1Id;
+    const player2Id = match.player2Id;
+    
+    // Apply all moves
+    allMoves.forEach(move => {
+      const data = JSON.parse(move.moveData);
+      sticks -= data.take;
+    });
+    
+    if (sticks <= 0) {
+      // Current player loses (took last stick)
+      const winnerId = playerId === player1Id ? player2Id : player1Id;
+      return {
+        finished: true,
+        gameState: { sticks: 0, currentPlayer: null, lastPlayer: playerId },
+        winnerId
+      };
     }
     
-    const isComplete = word.split('').every(letter => guessedLetters.includes(letter));
+    return {
+      finished: false,
+      gameState: { 
+        sticks, 
+        currentPlayer: playerId === player1Id ? player2Id : player1Id,
+        lastPlayer: playerId
+      },
+      winnerId: null
+    };
+  }
+
+  function processHangmanMove(match: any, moveData: any, allMoves: any[], playerId: string) {
+    const gameState = JSON.parse(match.gameData || '{}');
+    const word = gameState.word || 'BLOCKCHAIN';
+    
+    // Build guessed letters from all moves
+    const guessedLetters: string[] = [];
+    let wrongGuesses = 0;
+    
+    allMoves.forEach(move => {
+      const data = JSON.parse(move.moveData);
+      const letter = data.letter;
+      if (!guessedLetters.includes(letter)) {
+        guessedLetters.push(letter);
+        if (!word.includes(letter)) {
+          wrongGuesses++;
+        }
+      }
+    });
+    
+    const isComplete = word.split('').every((letter: string) => guessedLetters.includes(letter));
     const failed = wrongGuesses >= 6;
     
     return {
       finished: isComplete || failed,
-      gameState: { word, guessedLetters, wrongGuesses },
-      winnerId: isComplete ? guestUser.id : failed ? match.player2Id : null
+      gameState: { word, guessedLetters, wrongGuesses, currentPlayer: playerId },
+      winnerId: isComplete ? playerId : failed ? (match.player1Id === playerId ? match.player2Id : match.player1Id) : null
     };
   }
 
@@ -462,7 +475,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       paper: 'rock',
       scissors: 'paper'
     };
-    return winConditions[move1] === move2 ? 'win' : 'lose';
+    return winConditions[move1] === move2 ? 'player1' : 'player2';
   }
 
   function checkTicTacToeWinner(board: (string | null)[]) {
@@ -480,9 +493,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return null;
   }
 
-  async function updateUserAfterGame(won: boolean, stake: string) {
+  async function updateUserAfterGame(won: boolean, stake: string, userId: string) {
+    const user = await storage.getUser(userId);
+    if (!user) return;
+
     const stakeAmount = parseFloat(stake);
-    const currentBalance = parseFloat(guestUser.balance);
+    const currentBalance = parseFloat(user.balance || "0");
     let newBalance = currentBalance;
     let earnedAmount = "0";
     
@@ -492,7 +508,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       earnedAmount = winnings.toFixed(2);
       
       await storage.createTransaction({
-        userId: guestUser.id,
+        userId,
         type: "win",
         amount: earnedAmount,
         description: "Game victory reward"
@@ -501,18 +517,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       newBalance -= stakeAmount;
       
       await storage.createTransaction({
-        userId: guestUser.id,
+        userId,
         type: "lose",
         amount: stake,
         description: "Game stake lost"
       });
     }
     
-    guestUser = await storage.updateUserBalance(guestUser.id, newBalance.toFixed(2)) || guestUser;
+    await storage.updateUserBalance(userId, newBalance.toFixed(2));
     
     // Update stats
-    const stats = await storage.getUserStats(guestUser.id);
-    await storage.updateUserStats(guestUser.id, {
+    const stats = await storage.getUserStats(userId);
+    await storage.updateUserStats(userId, {
       totalGames: (stats?.totalGames || 0) + 1,
       totalWins: (stats?.totalWins || 0) + (won ? 1 : 0),
       totalLosses: (stats?.totalLosses || 0) + (won ? 0 : 1),

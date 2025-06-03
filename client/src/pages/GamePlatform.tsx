@@ -95,6 +95,7 @@ export default function GamePlatform() {
   const [depositAmount, setDepositAmount] = useState('');
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [withdrawAddress, setWithdrawAddress] = useState('');
+  const [sessionUser, setSessionUser] = useState<User | null>(null);
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
