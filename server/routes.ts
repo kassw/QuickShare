@@ -130,12 +130,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Update user balance for mock transactions
       if (type === "deposit") {
-        const currentBalance = parseFloat(guestUser.balance || '0');
+        const currentBalance = parseFloat(guestUser.balance ?? '0');
         const newBalance = (currentBalance + parseFloat(amount)).toFixed(2);
         const updatedUser = await storage.updateUserBalance(guestUser.id, newBalance);
         guestUser = updatedUser || guestUser;
       } else if (type === "withdraw") {
-        const currentBalance = parseFloat(guestUser.balance || '0');
+        const currentBalance = parseFloat(guestUser.balance ?? '0');
         const newBalance = Math.max(0, currentBalance - parseFloat(amount)).toFixed(2);
         const updatedUser = await storage.updateUserBalance(guestUser.id, newBalance);
         guestUser = updatedUser || guestUser;
