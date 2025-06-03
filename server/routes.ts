@@ -7,12 +7,15 @@ import type { User } from "@shared/schema";
 
 // WebSocket message types
 type WSMessage = {
-  type: 'join_match' | 'make_move' | 'leave_match' | 'match_found' | 'game_update' | 'game_result';
+  type: 'join_match' | 'make_move' | 'leave_match' | 'match_found' | 'game_update' | 'game_result' | 'user_session';
   matchId?: string;
   move?: any;
   gameState?: any;
   result?: 'win' | 'lose' | 'draw';
   winnerId?: string;
+  currentPlayer?: string;
+  moveNumber?: number;
+  user?: any;
 };
 
 const connectedClients = new Map<string, WebSocket>();
@@ -112,57 +115,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/matches/:matchId/moves", async (req, res) => {
-    try {
-      const { matchId } = req.params;
-      const { move } = req.body;
-      
-      const match = await storage.getMatch(matchId);
-      if (!match) {
-        return res.status(404).json({ error: "Match not found" });
-      }
-      
-      const moves = await storage.getMatchMoves(matchId);
-      const moveNumber = moves.length + 1;
-      
-      const gameMove = await storage.createMove({
-        matchId,
-        playerId: guestUser.id,
-        moveData: JSON.stringify(move),
-        moveNumber
-      });
-      
-      // Process the move and update game state
-      const gameResult = await processGameMove(match, gameMove, moves);
-      
-      if (gameResult.finished) {
-        await storage.updateMatch(matchId, {
-          state: "finished",
-          winnerId: gameResult.winnerId,
-          finishedAt: new Date()
-        });
-        
-        // Update user stats and balance
-        await updateUserAfterGame(gameResult.winnerId === guestUser.id, match.stake);
-        
-        broadcastToMatch(matchId, {
-          type: 'game_result',
-          result: gameResult.winnerId === guestUser.id ? 'win' : 
-                  gameResult.winnerId ? 'lose' : 'draw',
-          gameState: gameResult.gameState
-        });
-      } else {
-        broadcastToMatch(matchId, {
-          type: 'game_update',
-          gameState: gameResult.gameState
-        });
-      }
-      
-      res.json(gameMove);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to make move" });
-    }
-  });
+  // Remove the old REST endpoint for moves - now handled via WebSocket only
 
   app.post("/api/transactions", async (req, res) => {
     try {
@@ -244,21 +197,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
   async function handleGameMove(matchId: string, playerId: string, move: any) {
     try {
       const match = await storage.getMatch(matchId);
-      if (!match || match.state !== 'in_progress') return;
+      if (!match || match.state !== 'in_progress') {
+        console.log(`Match ${matchId} not found or not in progress`);
+        return;
+      }
 
       const moves = await storage.getMatchMoves(matchId);
       const moveNumber = moves.length + 1;
 
-      await storage.createMove({
+      const gameMove = await storage.createMove({
         matchId,
         playerId,
         moveData: JSON.stringify(move),
         moveNumber
       });
 
-      // Get updated moves
+      console.log(`Move ${moveNumber} by player ${playerId} in match ${matchId}:`, move);
+
+      // Get updated moves after adding the new one
       const allMoves = await storage.getMatchMoves(matchId);
       const gameResult = await processGameMove(match, move, allMoves, playerId);
+
+      console.log(`Game result for match ${matchId}:`, gameResult);
+
+      // Always broadcast the current game state to both players
+      broadcastToMatch(matchId, {
+        type: 'game_update',
+        gameState: gameResult.gameState,
+        currentPlayer: playerId,
+        moveNumber
+      });
 
       if (gameResult.finished) {
         await storage.updateMatch(matchId, {
@@ -269,21 +237,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
 
         // Update user stats and balance for both players
-        if (match.player1Id) await updateUserAfterGame(gameResult.winnerId === match.player1Id, match.stake, match.player1Id);
-        if (match.player2Id) await updateUserAfterGame(gameResult.winnerId === match.player2Id, match.stake, match.player2Id);
+        if (match.player1Id) {
+          await updateUserAfterGame(gameResult.winnerId === match.player1Id, match.stake, match.player1Id);
+        }
+        if (match.player2Id) {
+          await updateUserAfterGame(gameResult.winnerId === match.player2Id, match.stake, match.player2Id);
+        }
 
-        broadcastToMatch(matchId, {
-          type: 'game_result',
-          result: gameResult.winnerId === playerId ? 'win' : 
-                  gameResult.winnerId ? 'lose' : 'draw',
-          gameState: gameResult.gameState,
-          winnerId: gameResult.winnerId
-        });
-      } else {
-        broadcastToMatch(matchId, {
-          type: 'game_update',
-          gameState: gameResult.gameState
-        });
+        // Send specific result to each player
+        if (match.player1Id) {
+          const player1ConnectionId = userConnections.get(match.player1Id);
+          if (player1ConnectionId) {
+            const player1Client = connectedClients.get(player1ConnectionId);
+            if (player1Client && player1Client.readyState === WebSocket.OPEN) {
+              player1Client.send(JSON.stringify({
+                type: 'game_result',
+                result: gameResult.winnerId === match.player1Id ? 'win' : 
+                        gameResult.winnerId ? 'lose' : 'draw',
+                gameState: gameResult.gameState,
+                winnerId: gameResult.winnerId
+              }));
+            }
+          }
+        }
+
+        if (match.player2Id) {
+          const player2ConnectionId = userConnections.get(match.player2Id);
+          if (player2ConnectionId) {
+            const player2Client = connectedClients.get(player2ConnectionId);
+            if (player2Client && player2Client.readyState === WebSocket.OPEN) {
+              player2Client.send(JSON.stringify({
+                type: 'game_result',
+                result: gameResult.winnerId === match.player2Id ? 'win' : 
+                        gameResult.winnerId ? 'lose' : 'draw',
+                gameState: gameResult.gameState,
+                winnerId: gameResult.winnerId
+              }));
+            }
+          }
+        }
       }
     } catch (error) {
       console.error('Game move error:', error);

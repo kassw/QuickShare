@@ -72,7 +72,7 @@ export default function GameInterface({
   }, [lastMessage]);
 
   const handleMove = (move: any) => {
-    makeMove(move);
+    console.log('Sending move:', move);
     sendMessage({
       type: 'make_move',
       matchId: match.id,

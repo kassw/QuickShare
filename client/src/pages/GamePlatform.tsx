@@ -105,12 +105,25 @@ export default function GamePlatform() {
 
   // Queries
   const { data: userData } = useQuery({
-    queryKey: ['/api/user'],
+    queryKey: ['/api/user', sessionUser?.id],
+    queryFn: async () => {
+      const userId = sessionUser?.id;
+      if (!userId) return null;
+      const res = await fetch(`/api/user/${userId}`);
+      return res.json();
+    },
+    enabled: !!sessionUser?.id
   });
 
   const { data: transactions } = useQuery({
-    queryKey: ['/api/user/transactions'],
-    enabled: currentSection === 'history'
+    queryKey: ['/api/user/transactions', sessionUser?.id],
+    queryFn: async () => {
+      const userId = sessionUser?.id;
+      if (!userId) return [];
+      const res = await fetch(`/api/user/${userId}/transactions`);
+      return res.json();
+    },
+    enabled: currentSection === 'history' && !!sessionUser?.id
   });
 
   // Mutations
@@ -148,7 +161,7 @@ export default function GamePlatform() {
     }
   });
 
-  const user = userData?.user as User | undefined;
+  const user = (sessionUser || userData?.user) as User | undefined;
   const stats = userData?.stats as UserStats | undefined;
 
   const winRate = stats && stats.totalGames > 0 
