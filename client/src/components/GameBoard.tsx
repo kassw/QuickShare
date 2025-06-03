@@ -170,31 +170,78 @@ export default function GameBoard({ gameType, gameState, onMove, disabled, user 
     const word = gameState.word || 'BLOCKCHAIN';
     const guessedLetters = gameState.guessedLetters || [];
     const wrongGuesses = gameState.wrongGuesses || 0;
-    const displayWord = word.split('').map(letter => 
+    const displayWord = gameState.displayWord || word.split('').map((letter: any) => 
       guessedLetters.includes(letter) ? letter : '_'
     ).join(' ');
 
     return (
-      <div className="text-center">
-        <p className="text-gray-400 mb-6">Wrong guesses: {wrongGuesses}/6</p>
-        <div className="font-pixel text-3xl text-neon-green mb-8 tracking-wider">
+      <div className="text-center relative retro-scanlines">
+        <motion.p 
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="text-gray-400 mb-4 font-pixel text-lg animate-glow"
+        >
+          {gameState.currentPlayer ? (gameState.isYourTurn?.(user?.id) ? "YOUR TURN" : "OPPONENT'S TURN") : 
+           (gameState.won ? "WORD GUESSED!" : gameState.lost ? "GAME OVER" : "GAME OVER")}
+        </motion.p>
+        
+        <motion.div 
+          initial={{ scale: 0.8 }}
+          animate={{ scale: 1 }}
+          className="text-retro-cyan mb-4 font-pixel animate-glow"
+        >
+          WRONG GUESSES: {wrongGuesses}/6
+        </motion.div>
+
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="font-pixel text-3xl text-neon-green mb-8 tracking-wider animate-glow"
+        >
           {displayWord}
-        </div>
+        </motion.div>
+
+        {gameState.gameOver && (
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="font-pixel text-xl text-retro-cyan mb-4"
+          >
+            THE WORD WAS: {word}
+          </motion.div>
+        )}
+
         <div className="grid grid-cols-6 gap-2 max-w-md mx-auto mb-6">
-          {'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map(letter => (
-            <motion.div key={letter} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-              <Button
-                onClick={() => onMove({ letter })}
-                disabled={disabled || guessedLetters.includes(letter)}
-                className={`bg-retro-dark border-2 border-neon-green/30 hover:border-neon-green p-2 font-pixel text-sm transition-all duration-300 ${
-                  guessedLetters.includes(letter) ? 'opacity-50 cursor-not-allowed' : ''
-                }`}
-                variant="outline"
+          {'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map((letter: any) => {
+            const isGuessed = guessedLetters.includes(letter);
+            const isInWord = word.toUpperCase().includes(letter);
+            
+            return (
+              <motion.div 
+                key={letter} 
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: letter.charCodeAt(0) * 0.01 }}
+                whileHover={{ scale: 1.05 }} 
+                whileTap={{ scale: 0.95 }}
               >
-                {letter}
-              </Button>
-            </motion.div>
-          ))}
+                <Button
+                  onClick={() => onMove({ letter })}
+                  disabled={disabled || isGuessed || !gameState.isYourTurn?.(user?.id) || gameState.gameOver}
+                  className={`arcade-border p-2 font-pixel text-sm transition-all duration-300 ${
+                    isGuessed 
+                      ? isInWord 
+                        ? 'bg-neon-green/20 text-neon-green border-neon-green' 
+                        : 'bg-red-500/20 text-red-400 border-red-500'
+                      : 'bg-retro-dark hover:bg-neon-green/10'
+                  }`}
+                  variant="outline"
+                >
+                  {letter}
+                </Button>
+              </motion.div>
+            );
+          })}
         </div>
       </div>
     );

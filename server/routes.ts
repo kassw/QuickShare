@@ -130,13 +130,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Update user balance for mock transactions
       if (type === "deposit") {
-        const currentBalance = parseFloat(guestUser.balance);
+        const currentBalance = parseFloat(guestUser.balance || '0');
         const newBalance = (currentBalance + parseFloat(amount)).toFixed(2);
-        guestUser = await storage.updateUserBalance(guestUser.id, newBalance) || guestUser;
+        const updatedUser = await storage.updateUserBalance(guestUser.id, newBalance);
+        guestUser = updatedUser || guestUser;
       } else if (type === "withdraw") {
-        const currentBalance = parseFloat(guestUser.balance);
+        const currentBalance = parseFloat(guestUser.balance || '0');
         const newBalance = Math.max(0, currentBalance - parseFloat(amount)).toFixed(2);
-        guestUser = await storage.updateUserBalance(guestUser.id, newBalance) || guestUser;
+        const updatedUser = await storage.updateUserBalance(guestUser.id, newBalance);
+        guestUser = updatedUser || guestUser;
       }
       
       res.json(transaction);
@@ -203,6 +205,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const moves = await storage.getMatchMoves(matchId);
+      
+      // For turn-based games, validate turn order
+      if (match.gameType !== 'rps') {
+        const expectedPlayer = moves.length % 2 === 0 ? match.player1Id : match.player2Id;
+        if (playerId !== expectedPlayer) {
+          console.log(`Not ${playerId}'s turn. Expected: ${expectedPlayer}, Move #${moves.length + 1}`);
+          return;
+        }
+      }
+
       const moveNumber = moves.length + 1;
 
       const gameMove = await storage.createMove({
@@ -221,10 +233,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`Game result for match ${matchId}:`, gameResult);
 
       // Always broadcast the current game state to both players
+      const currentPlayer = 'currentPlayer' in gameResult.gameState ? gameResult.gameState.currentPlayer : null;
       broadcastToMatch(matchId, {
         type: 'game_update',
         gameState: gameResult.gameState,
-        currentPlayer: playerId,
+        currentPlayer: currentPlayer,
         moveNumber
       });
 
@@ -357,14 +370,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       return {
         finished: true,
-        gameState: { moves: playerMoves, result, move1, move2 },
+        gameState: { 
+          moves: playerMoves, 
+          result, 
+          move1, 
+          move2,
+          currentPlayer: null
+        },
         winnerId
       };
     }
     
     return {
       finished: false,
-      gameState: { moves: playerMoves, waitingFor: !playerMoves[player1Id] ? player1Id : player2Id },
+      gameState: { 
+        moves: playerMoves, 
+        waitingFor: !playerMoves[player1Id] ? player1Id : player2Id,
+        currentPlayer: null
+      },
       winnerId: null
     };
   }
@@ -455,26 +478,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   function processHangmanMove(match: any, moveData: any, allMoves: any[], playerId: string) {
     const gameState = JSON.parse(match.gameData || '{}');
-    const word = gameState.word || 'BLOCKCHAIN';
+    const words = ['BLOCKCHAIN', 'CRYPTOCURRENCY', 'ARCADE', 'RETRO', 'GAMING', 'PIXEL', 'NEON'];
+    const word = gameState.word || words[Math.floor(Math.random() * words.length)];
     const player1Id = match.player1Id;
     const player2Id = match.player2Id;
     
-    // Build guessed letters from all moves
+    // Build guessed letters from all moves, avoiding duplicates
     const guessedLetters: string[] = [];
     let wrongGuesses = 0;
     
     allMoves.forEach(move => {
       const data = JSON.parse(move.moveData);
-      const letter = data.letter;
-      if (!guessedLetters.includes(letter)) {
+      const letter = data.letter?.toUpperCase();
+      if (letter && !guessedLetters.includes(letter)) {
         guessedLetters.push(letter);
-        if (!word.includes(letter)) {
+        if (!word.toUpperCase().includes(letter)) {
           wrongGuesses++;
         }
       }
     });
     
-    const isComplete = word.split('').every((letter: string) => guessedLetters.includes(letter));
+    const wordLetters = word.toUpperCase().split('');
+    const isComplete = wordLetters.every((letter: string) => guessedLetters.includes(letter));
     const failed = wrongGuesses >= 6;
     
     // In Hangman, players take turns guessing letters
@@ -486,21 +511,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Player who completed the word wins
       winnerId = playerId;
     } else if (failed) {
-      // Both players lose if they fail to guess the word
-      winnerId = null; // Draw
+      // Both players lose if they fail to guess the word - it's a draw
+      winnerId = null;
     }
+    
+    const displayWord = wordLetters.map((letter: string) => 
+      guessedLetters.includes(letter) ? letter : '_'
+    ).join(' ');
     
     return {
       finished: isComplete || failed,
       gameState: { 
-        word, 
+        word: failed || isComplete ? word : word, // Always show word for debugging
         guessedLetters, 
         wrongGuesses, 
         currentPlayer: (isComplete || failed) ? null : nextPlayer,
         isYourTurn: (userId: string) => !isComplete && !failed && nextPlayer === userId,
-        displayWord: word.split('').map((letter: string) => 
-          guessedLetters.includes(letter) ? letter : '_'
-        ).join(' ')
+        displayWord,
+        maxWrongGuesses: 6,
+        gameOver: isComplete || failed,
+        won: isComplete,
+        lost: failed
       },
       winnerId
     };
