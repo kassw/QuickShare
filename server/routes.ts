@@ -206,18 +206,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const moves = await storage.getMatchMoves(matchId);
       
-      // For turn-based games, validate turn order
+      // For turn-based games, validate turn order (player1 always goes first)
       if (match.gameType !== 'rps') {
         const expectedPlayer = moves.length % 2 === 0 ? match.player1Id : match.player2Id;
         if (playerId !== expectedPlayer) {
-          console.log(`Not ${playerId}'s turn. Expected: ${expectedPlayer}, Move #${moves.length + 1}`);
+          console.log(`Not ${playerId}'s turn. Expected: ${expectedPlayer} (Player ${expectedPlayer === match.player1Id ? '1' : '2'}), Move #${moves.length + 1}`);
+          return;
+        }
+      }
+
+      // For RPS, allow both players to make moves but prevent duplicate moves
+      if (match.gameType === 'rps') {
+        const playerHasMoved = moves.some(m => m.playerId === playerId);
+        if (playerHasMoved) {
+          console.log(`Player ${playerId} has already moved in RPS match ${matchId}`);
           return;
         }
       }
 
       const moveNumber = moves.length + 1;
 
-      const gameMove = await storage.createMove({
+      await storage.createMove({
         matchId,
         playerId,
         moveData: JSON.stringify(move),
@@ -238,7 +247,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         type: 'game_update',
         gameState: gameResult.gameState,
         currentPlayer: currentPlayer,
-        moveNumber
+        moveNumber: allMoves.length
       });
 
       if (gameResult.finished) {
@@ -397,14 +406,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const player1Id = match.player1Id;
     const player2Id = match.player2Id;
     
-    // Check if it's the correct player's turn
-    const moveNumber = allMoves.length;
-    const expectedPlayer = moveNumber % 2 === 0 ? player1Id : player2Id;
-    
-    // Apply all moves to board
+    // Apply all moves to board (Player 1 = X, Player 2 = O)
     allMoves.forEach((move, index) => {
       const data = JSON.parse(move.moveData);
-      const symbol = index % 2 === 0 ? 'X' : 'O';
+      const isPlayer1Move = move.playerId === player1Id;
+      const symbol = isPlayer1Move ? 'X' : 'O';
       if (data.position !== undefined && board[data.position] === null) {
         board[data.position] = symbol;
       }
@@ -417,16 +423,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (winner === 'X') winnerId = player1Id;
     else if (winner === 'O') winnerId = player2Id;
     
-    const nextPlayer = moveNumber % 2 === 0 ? player2Id : player1Id;
+    // Next player: if we have even number of moves, player1 goes next
+    const nextPlayer = finished ? null : (allMoves.length % 2 === 0 ? player1Id : player2Id);
     
     return {
       finished,
       gameState: { 
         board, 
-        currentPlayer: finished ? null : nextPlayer,
-        nextSymbol: finished ? null : (moveNumber % 2 === 0 ? 'O' : 'X'),
+        currentPlayer: nextPlayer,
         winner,
-        isYourTurn: (userId: string) => !finished && nextPlayer === userId
+        isYourTurn: (userId: string) => !finished && nextPlayer === userId,
+        playerSymbol: (userId: string) => userId === player1Id ? 'X' : 'O'
       },
       winnerId
     };
@@ -436,10 +443,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     let sticks = 21;
     const player1Id = match.player1Id;
     const player2Id = match.player2Id;
-    
-    // Check if it's the correct player's turn
-    const moveNumber = allMoves.length;
-    const expectedPlayer = moveNumber % 2 === 0 ? player1Id : player2Id;
     
     // Apply all moves
     allMoves.forEach(move => {
@@ -462,7 +465,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
     }
     
-    const nextPlayer = playerId === player1Id ? player2Id : player1Id;
+    // Next player: if we have even number of moves, player1 goes next
+    const nextPlayer = allMoves.length % 2 === 0 ? player1Id : player2Id;
     
     return {
       finished: false,
@@ -502,9 +506,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const isComplete = wordLetters.every((letter: string) => guessedLetters.includes(letter));
     const failed = wrongGuesses >= 6;
     
-    // In Hangman, players take turns guessing letters
-    const moveNumber = allMoves.length;
-    const nextPlayer = moveNumber % 2 === 0 ? player2Id : player1Id;
+    // Next player: if we have even number of moves, player1 goes next
+    const nextPlayer = (isComplete || failed) ? null : (allMoves.length % 2 === 0 ? player1Id : player2Id);
     
     let winnerId = null;
     if (isComplete) {
@@ -522,10 +525,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return {
       finished: isComplete || failed,
       gameState: { 
-        word: failed || isComplete ? word : word, // Always show word for debugging
+        word: word, // Always include word
         guessedLetters, 
         wrongGuesses, 
-        currentPlayer: (isComplete || failed) ? null : nextPlayer,
+        currentPlayer: nextPlayer,
         isYourTurn: (userId: string) => !isComplete && !failed && nextPlayer === userId,
         displayWord,
         maxWrongGuesses: 6,
