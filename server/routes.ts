@@ -374,11 +374,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const player1Id = match.player1Id;
     const player2Id = match.player2Id;
     
+    // Check if it's the correct player's turn
+    const moveNumber = allMoves.length;
+    const expectedPlayer = moveNumber % 2 === 0 ? player1Id : player2Id;
+    
     // Apply all moves to board
-    allMoves.forEach(move => {
+    allMoves.forEach((move, index) => {
       const data = JSON.parse(move.moveData);
-      const symbol = move.playerId === player1Id ? 'X' : 'O';
-      board[data.position] = symbol;
+      const symbol = index % 2 === 0 ? 'X' : 'O';
+      if (data.position !== undefined && board[data.position] === null) {
+        board[data.position] = symbol;
+      }
     });
     
     const winner = checkTicTacToeWinner(board);
@@ -388,12 +394,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (winner === 'X') winnerId = player1Id;
     else if (winner === 'O') winnerId = player2Id;
     
+    const nextPlayer = moveNumber % 2 === 0 ? player2Id : player1Id;
+    
     return {
       finished,
       gameState: { 
         board, 
-        currentPlayer: allMoves.length % 2 === 0 ? 'X' : 'O',
-        winner 
+        currentPlayer: finished ? null : nextPlayer,
+        nextSymbol: finished ? null : (moveNumber % 2 === 0 ? 'O' : 'X'),
+        winner,
+        isYourTurn: (userId: string) => !finished && nextPlayer === userId
       },
       winnerId
     };
@@ -404,6 +414,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const player1Id = match.player1Id;
     const player2Id = match.player2Id;
     
+    // Check if it's the correct player's turn
+    const moveNumber = allMoves.length;
+    const expectedPlayer = moveNumber % 2 === 0 ? player1Id : player2Id;
+    
     // Apply all moves
     allMoves.forEach(move => {
       const data = JSON.parse(move.moveData);
@@ -411,21 +425,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
     
     if (sticks <= 0) {
-      // Current player loses (took last stick)
+      // Player who took the last stick loses
       const winnerId = playerId === player1Id ? player2Id : player1Id;
       return {
         finished: true,
-        gameState: { sticks: 0, currentPlayer: null, lastPlayer: playerId },
+        gameState: { 
+          sticks: 0, 
+          currentPlayer: null, 
+          lastPlayer: playerId,
+          gameOver: true
+        },
         winnerId
       };
     }
+    
+    const nextPlayer = playerId === player1Id ? player2Id : player1Id;
     
     return {
       finished: false,
       gameState: { 
         sticks, 
-        currentPlayer: playerId === player1Id ? player2Id : player1Id,
-        lastPlayer: playerId
+        currentPlayer: nextPlayer,
+        lastPlayer: playerId,
+        isYourTurn: (userId: string) => nextPlayer === userId
       },
       winnerId: null
     };
@@ -434,6 +456,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   function processHangmanMove(match: any, moveData: any, allMoves: any[], playerId: string) {
     const gameState = JSON.parse(match.gameData || '{}');
     const word = gameState.word || 'BLOCKCHAIN';
+    const player1Id = match.player1Id;
+    const player2Id = match.player2Id;
     
     // Build guessed letters from all moves
     const guessedLetters: string[] = [];
@@ -453,10 +477,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const isComplete = word.split('').every((letter: string) => guessedLetters.includes(letter));
     const failed = wrongGuesses >= 6;
     
+    // In Hangman, players take turns guessing letters
+    const moveNumber = allMoves.length;
+    const nextPlayer = moveNumber % 2 === 0 ? player2Id : player1Id;
+    
+    let winnerId = null;
+    if (isComplete) {
+      // Player who completed the word wins
+      winnerId = playerId;
+    } else if (failed) {
+      // Both players lose if they fail to guess the word
+      winnerId = null; // Draw
+    }
+    
     return {
       finished: isComplete || failed,
-      gameState: { word, guessedLetters, wrongGuesses, currentPlayer: playerId },
-      winnerId: isComplete ? playerId : failed ? (match.player1Id === playerId ? match.player2Id : match.player1Id) : null
+      gameState: { 
+        word, 
+        guessedLetters, 
+        wrongGuesses, 
+        currentPlayer: (isComplete || failed) ? null : nextPlayer,
+        isYourTurn: (userId: string) => !isComplete && !failed && nextPlayer === userId,
+        displayWord: word.split('').map((letter: string) => 
+          guessedLetters.includes(letter) ? letter : '_'
+        ).join(' ')
+      },
+      winnerId
     };
   }
 

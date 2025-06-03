@@ -140,6 +140,7 @@ export default function GameInterface({
               gameState={gameState}
               onMove={handleMove}
               disabled={match.state !== 'in_progress' || isGameFinished}
+              user={user}
             />
           </div>
 

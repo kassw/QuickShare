@@ -6,9 +6,13 @@ interface GameBoardProps {
   gameState: any;
   onMove: (move: any) => void;
   disabled: boolean;
+  user?: {
+    id: string;
+    nickname: string;
+  };
 }
 
-export default function GameBoard({ gameType, gameState, onMove, disabled }: GameBoardProps) {
+export default function GameBoard({ gameType, gameState, onMove, disabled, user }: GameBoardProps) {
   const renderRockPaperScissors = () => (
     <div className="text-center relative retro-scanlines">
       <motion.p 
@@ -73,15 +77,30 @@ export default function GameBoard({ gameType, gameState, onMove, disabled }: Gam
   );
 
   const renderTicTacToe = () => (
-    <div className="text-center">
-      <p className="text-gray-400 mb-6">You are X, opponent is O</p>
+    <div className="text-center relative retro-scanlines">
+      <motion.p 
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="text-gray-400 mb-6 font-pixel text-lg animate-glow"
+      >
+        {gameState.currentPlayer ? (gameState.isYourTurn?.(user?.id) ? "YOUR TURN" : "OPPONENT'S TURN") : "GAME OVER"}
+      </motion.p>
       <div className="grid grid-cols-3 gap-2 max-w-xs mx-auto">
         {Array(9).fill(null).map((_, index) => (
-          <motion.div key={index} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+          <motion.div 
+            key={index} 
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: index * 0.05 }}
+            whileHover={{ scale: 1.05 }} 
+            whileTap={{ scale: 0.95 }}
+          >
             <Button
               onClick={() => onMove({ position: index })}
-              disabled={disabled || gameState.board?.[index] !== null}
-              className="bg-retro-dark border-2 border-neon-green/30 hover:border-neon-green w-20 h-20 text-2xl font-pixel transition-all duration-300"
+              disabled={disabled || gameState.board?.[index] !== null || !gameState.isYourTurn?.(user?.id)}
+              className={`arcade-border bg-retro-dark w-20 h-20 text-2xl font-pixel transition-all duration-300 ${
+                gameState.board?.[index] === 'X' ? 'text-neon-green' : 'text-retro-cyan'
+              }`}
               variant="outline"
             >
               {gameState.board?.[index] || ''}
@@ -93,28 +112,53 @@ export default function GameBoard({ gameType, gameState, onMove, disabled }: Gam
   );
 
   const renderSticks = () => (
-    <div className="text-center">
-      <p className="text-gray-400 mb-6">Take 1-3 sticks. Last stick loses!</p>
+    <div className="text-center relative retro-scanlines">
+      <motion.p 
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="text-gray-400 mb-6 font-pixel text-lg animate-glow"
+      >
+        {gameState.currentPlayer ? (gameState.isYourTurn?.(user?.id) ? "YOUR TURN" : "OPPONENT'S TURN") : "GAME OVER"}
+      </motion.p>
       <div className="mb-6">
-        <div className="font-pixel text-2xl text-neon-green mb-4">
-          Sticks remaining: {gameState.sticks || 21}
-        </div>
+        <motion.div 
+          initial={{ scale: 0.8 }}
+          animate={{ scale: 1 }}
+          className="font-pixel text-2xl text-neon-green mb-4 animate-glow"
+        >
+          STICKS REMAINING: {gameState.sticks || 21}
+        </motion.div>
         <div className="flex justify-center space-x-1 mb-6 flex-wrap">
           {Array(Math.max(0, gameState.sticks || 21)).fill(null).map((_, i) => (
-            <div key={i} className="w-1 h-16 bg-neon-green"></div>
+            <motion.div 
+              key={i} 
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 64 }}
+              transition={{ delay: i * 0.02 }}
+              className="w-2 h-16 bg-neon-green animate-float"
+              style={{ animationDelay: `${i * 0.1}s` }}
+            />
           ))}
         </div>
       </div>
       <div className="space-x-4">
         {[1, 2, 3].map((take) => (
-          <motion.div key={take} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="inline-block">
+          <motion.div 
+            key={take} 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: take * 0.1 }}
+            whileHover={{ scale: 1.05 }} 
+            whileTap={{ scale: 0.95 }} 
+            className="inline-block"
+          >
             <Button
               onClick={() => onMove({ take })}
-              disabled={disabled || take > (gameState.sticks || 21)}
-              className="bg-retro-dark border-2 border-neon-green/30 hover:border-neon-green px-6 py-3 font-pixel transition-all duration-300"
+              disabled={disabled || take > (gameState.sticks || 21) || !gameState.isYourTurn?.(user?.id)}
+              className="arcade-border bg-retro-dark px-6 py-3 font-pixel transition-all duration-300 hover:bg-neon-green/10"
               variant="outline"
             >
-              Take {take}
+              TAKE {take}
             </Button>
           </motion.div>
         ))}
