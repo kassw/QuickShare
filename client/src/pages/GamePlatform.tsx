@@ -116,20 +116,22 @@ export default function GamePlatform() {
   // Mutations
   const createMatchMutation = useMutation({
     mutationFn: async ({ gameType, stake }: { gameType: GameType; stake: string }) => {
-      const res = await apiRequest('POST', '/api/matches', { gameType, stake });
+      const userId = sessionUser?.id;
+      const res = await apiRequest('POST', '/api/matches', { gameType, stake, userId });
       return res.json();
     },
     onSuccess: (match) => {
       setCurrentMatch(match);
+      sendMessage({ type: 'join_match', matchId: match.id });
       if (match.state === 'in_progress') {
         toast({
-          title: "Match Found!",
-          description: "Starting game...",
+          title: "🎮 MATCH FOUND!",
+          description: "ENTERING BATTLE MODE...",
         });
       } else {
         toast({
-          title: "Searching...",
-          description: "Looking for opponent...",
+          title: "🔍 SEARCHING...",
+          description: "SCANNING FOR OPPONENTS...",
         });
       }
     }
@@ -159,20 +161,24 @@ export default function GamePlatform() {
       const message = JSON.parse(lastMessage.data);
       
       switch (message.type) {
+        case 'user_session':
+          setSessionUser(message.user);
+          queryClient.invalidateQueries({ queryKey: ['/api/user'] });
+          break;
         case 'match_found':
           setCurrentMatch(prev => prev ? { ...prev, state: 'in_progress' } : null);
           toast({
-            title: "Match Found!",
-            description: "Game is starting...",
+            title: "🎮 MATCH FOUND!",
+            description: "Entering the digital arena...",
           });
           break;
         case 'game_result':
-          const resultText = message.result === 'win' ? 'Victory!' : 
-                           message.result === 'lose' ? 'Defeat!' : 'Draw!';
+          const resultText = message.result === 'win' ? '🏆 VICTORY!' : 
+                           message.result === 'lose' ? '💀 GAME OVER!' : '🤝 DRAW!';
           toast({
             title: resultText,
-            description: message.result === 'win' ? 'You earned crypto!' : 
-                        message.result === 'lose' ? 'Better luck next time!' : 'Stake returned',
+            description: message.result === 'win' ? 'CRYPTO EARNED! +1337 XP' : 
+                        message.result === 'lose' ? 'BETTER LUCK NEXT TIME, PLAYER' : 'TIE GAME - STAKES RETURNED',
             variant: message.result === 'win' ? 'default' : 'destructive'
           });
           queryClient.invalidateQueries({ queryKey: ['/api/user'] });

@@ -78,7 +78,7 @@ export default function GameInterface({
       matchId: match.id,
       move
     });
-    setGameStatus("Waiting for opponent...");
+    setGameStatus("⚡ TRANSMITTING MOVE...");
   };
 
   const handlePlayAgain = () => {
