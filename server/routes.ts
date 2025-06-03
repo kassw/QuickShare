@@ -24,6 +24,49 @@ const userConnections = new Map<string, string>(); // userId -> websocket connec
 const connectionUsers = new Map<string, string>(); // websocket connection id -> userId
 let connectionCounter = 0;
 
+function createInitialGameState(gameType: string, player1Id: string, player2Id: string) {
+  switch (gameType) {
+    case 'rps':
+      return { 
+        moves: {}, 
+        result: null,
+        currentPlayer: null
+      };
+    case 'tictactoe':
+      return { 
+        board: Array(9).fill(null), 
+        currentPlayer: player1Id,
+        winner: null,
+        isYourTurn: (userId: string) => userId === player1Id,
+        playerSymbol: (userId: string) => userId === player1Id ? 'X' : 'O'
+      };
+    case 'sticks':
+      return { 
+        sticks: 21, 
+        currentPlayer: player1Id,
+        lastPlayer: null,
+        isYourTurn: (userId: string) => userId === player1Id
+      };
+    case 'hangman':
+      const words = ['BLOCKCHAIN', 'CRYPTOCURRENCY', 'ARCADE', 'RETRO', 'GAMING', 'PIXEL', 'NEON'];
+      const word = words[Math.floor(Math.random() * words.length)];
+      return { 
+        word,
+        guessedLetters: [],
+        wrongGuesses: 0,
+        currentPlayer: player1Id,
+        displayWord: word.split('').map(() => '_').join(' '),
+        maxWrongGuesses: 6,
+        gameOver: false,
+        won: false,
+        lost: false,
+        isYourTurn: (userId: string) => userId === player1Id
+      };
+    default:
+      return {};
+  }
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
 
@@ -81,10 +124,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return;
         }
         
+        // Create proper initial game state with currentPlayer
+        const initialGameState = createInitialGameState(gameType, match.player1Id, playerId);
+        
         const updatedMatch = await storage.updateMatch(match.id, {
           player2Id: playerId,
           state: "in_progress",
-          gameData: JSON.stringify(initializeGameState(gameType))
+          gameData: JSON.stringify(initialGameState)
         });
         
         userMatches.set(playerId, match.id);
@@ -93,7 +139,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         broadcastToMatch(match.id, {
           type: 'match_found',
           matchId: match.id,
-          gameState: initializeGameState(gameType)
+          gameState: initialGameState
         });
         
         res.json(updatedMatch);
@@ -316,6 +362,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
     });
+  }
+
+
+
+  function createInitialGameState(gameType: string, player1Id: string, player2Id: string) {
+    switch (gameType) {
+      case 'rps':
+        return { 
+          moves: {}, 
+          result: null,
+          currentPlayer: null
+        };
+      case 'tictactoe':
+        return { 
+          board: Array(9).fill(null), 
+          currentPlayer: player1Id,
+          winner: null,
+          isYourTurn: (userId: string) => userId === player1Id,
+          playerSymbol: (userId: string) => userId === player1Id ? 'X' : 'O'
+        };
+      case 'sticks':
+        return { 
+          sticks: 21, 
+          currentPlayer: player1Id,
+          lastPlayer: null,
+          isYourTurn: (userId: string) => userId === player1Id
+        };
+      case 'hangman':
+        const words = ['BLOCKCHAIN', 'CRYPTOCURRENCY', 'ARCADE', 'RETRO', 'GAMING', 'PIXEL', 'NEON'];
+        const word = words[Math.floor(Math.random() * words.length)];
+        return { 
+          word,
+          guessedLetters: [],
+          wrongGuesses: 0,
+          currentPlayer: player1Id,
+          displayWord: word.split('').map(() => '_').join(' '),
+          maxWrongGuesses: 6,
+          gameOver: false,
+          won: false,
+          lost: false,
+          isYourTurn: (userId: string) => userId === player1Id
+        };
+      default:
+        return {};
+    }
   }
 
   function initializeGameState(gameType: string) {
