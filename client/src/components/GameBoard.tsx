@@ -1,9 +1,13 @@
-import { motion } from "framer-motion";
+import { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent } from "@/components/ui/card";
 
 interface GameBoardProps {
   gameType: string;
   gameState: any;
+  serverGameState?: any;
   onMove: (move: any) => void;
   disabled: boolean;
   user?: {
@@ -12,7 +16,7 @@ interface GameBoardProps {
   };
 }
 
-export default function GameBoard({ gameType, gameState, onMove, disabled, user }: GameBoardProps) {
+export default function GameBoard({ gameType, gameState, serverGameState, onMove, disabled, user }: GameBoardProps) {
   const renderRockPaperScissors = () => (
     <div className="text-center relative retro-scanlines">
       <motion.p 
@@ -76,6 +80,10 @@ export default function GameBoard({ gameType, gameState, onMove, disabled, user 
     </div>
   );
 
+  // Use server game state if available, otherwise fall back to local game state
+  const currentGameState = serverGameState || gameState;
+  const isYourTurn = currentGameState.currentPlayer === user?.id || currentGameState.isYourTurn?.(user?.id);
+
   const renderTicTacToe = () => (
     <div className="text-center relative retro-scanlines">
       <motion.p 
@@ -83,10 +91,10 @@ export default function GameBoard({ gameType, gameState, onMove, disabled, user 
         animate={{ opacity: 1, y: 0 }}
         className="text-gray-400 mb-6 font-pixel text-lg animate-glow"
       >
-        {gameState.currentPlayer ? (gameState.isYourTurn?.(user?.id) ? "YOUR TURN" : "OPPONENT'S TURN") : "GAME OVER"}
+        {currentGameState.currentPlayer ? (isYourTurn ? "YOUR TURN" : "OPPONENT'S TURN") : "GAME OVER"}
       </motion.p>
       <div className="grid grid-cols-3 gap-2 max-w-xs mx-auto">
-        {Array(9).fill(null).map((_, index) => (
+        {currentGameState.board?.map((cell: string | null, index: number) => (
           <motion.div 
             key={index} 
             initial={{ opacity: 0, scale: 0.8 }}
@@ -97,13 +105,13 @@ export default function GameBoard({ gameType, gameState, onMove, disabled, user 
           >
             <Button
               onClick={() => onMove({ position: index })}
-              disabled={disabled || gameState.board?.[index] !== null || !gameState.isYourTurn?.(user?.id)}
+              disabled={disabled || currentGameState.board?.[index] !== null || !isYourTurn}
               className={`arcade-border bg-retro-dark w-20 h-20 text-2xl font-pixel transition-all duration-300 ${
-                gameState.board?.[index] === 'X' ? 'text-neon-green' : 'text-retro-cyan'
+                currentGameState.board?.[index] === 'X' ? 'text-neon-green' : 'text-retro-cyan'
               }`}
               variant="outline"
             >
-              {gameState.board?.[index] || ''}
+              {currentGameState.board?.[index] || ''}
             </Button>
           </motion.div>
         ))}
@@ -118,7 +126,7 @@ export default function GameBoard({ gameType, gameState, onMove, disabled, user 
         animate={{ opacity: 1, y: 0 }}
         className="text-gray-400 mb-6 font-pixel text-lg animate-glow"
       >
-        {gameState.currentPlayer ? (gameState.isYourTurn?.(user?.id) ? "YOUR TURN" : "OPPONENT'S TURN") : "GAME OVER"}
+        {currentGameState.currentPlayer ? (isYourTurn ? "YOUR TURN" : "OPPONENT'S TURN") : "GAME OVER"}
       </motion.p>
       <div className="mb-6">
         <motion.div 
@@ -126,10 +134,10 @@ export default function GameBoard({ gameType, gameState, onMove, disabled, user 
           animate={{ scale: 1 }}
           className="font-pixel text-2xl text-neon-green mb-4 animate-glow"
         >
-          STICKS REMAINING: {gameState.sticks || 21}
+          STICKS REMAINING: {currentGameState.sticks || 21}
         </motion.div>
         <div className="flex justify-center space-x-1 mb-6 flex-wrap">
-          {Array(Math.max(0, gameState.sticks || 21)).fill(null).map((_, i) => (
+          {Array(Math.max(0, currentGameState.sticks || 21)).fill(null).map((_, i) => (
             <motion.div 
               key={i} 
               initial={{ opacity: 0, height: 0 }}
@@ -154,7 +162,7 @@ export default function GameBoard({ gameType, gameState, onMove, disabled, user 
           >
             <Button
               onClick={() => onMove({ take })}
-              disabled={disabled || take > (gameState.sticks || 21) || !gameState.isYourTurn?.(user?.id)}
+              disabled={disabled || take > (currentGameState.sticks || 21) || !isYourTurn}
               className="arcade-border bg-retro-dark px-6 py-3 font-pixel transition-all duration-300 hover:bg-neon-green/10"
               variant="outline"
             >
@@ -167,10 +175,10 @@ export default function GameBoard({ gameType, gameState, onMove, disabled, user 
   );
 
   const renderHangman = () => {
-    const word = gameState.word || 'BLOCKCHAIN';
-    const guessedLetters = gameState.guessedLetters || [];
-    const wrongGuesses = gameState.wrongGuesses || 0;
-    const displayWord = gameState.displayWord || word.split('').map((letter: any) => 
+    const word = currentGameState.word || 'BLOCKCHAIN';
+    const guessedLetters = currentGameState.guessedLetters || [];
+    const wrongGuesses = currentGameState.wrongGuesses || 0;
+    const displayWord = currentGameState.displayWord || word.split('').map((letter: any) => 
       guessedLetters.includes(letter) ? letter : '_'
     ).join(' ');
 
@@ -181,10 +189,10 @@ export default function GameBoard({ gameType, gameState, onMove, disabled, user 
           animate={{ opacity: 1, y: 0 }}
           className="text-gray-400 mb-4 font-pixel text-lg animate-glow"
         >
-          {gameState.currentPlayer ? (gameState.isYourTurn?.(user?.id) ? "YOUR TURN" : "OPPONENT'S TURN") : 
-           (gameState.won ? "WORD GUESSED!" : gameState.lost ? "GAME OVER" : "GAME OVER")}
+          {currentGameState.currentPlayer ? (isYourTurn ? "YOUR TURN" : "OPPONENT'S TURN") : 
+           (currentGameState.won ? "WORD GUESSED!" : currentGameState.lost ? "GAME OVER" : "GAME OVER")}
         </motion.p>
-        
+
         <motion.div 
           initial={{ scale: 0.8 }}
           animate={{ scale: 1 }}
@@ -201,7 +209,7 @@ export default function GameBoard({ gameType, gameState, onMove, disabled, user 
           {displayWord}
         </motion.div>
 
-        {gameState.gameOver && (
+        {currentGameState.gameOver && (
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -215,7 +223,7 @@ export default function GameBoard({ gameType, gameState, onMove, disabled, user 
           {'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map((letter: any) => {
             const isGuessed = guessedLetters.includes(letter);
             const isInWord = word.toUpperCase().includes(letter);
-            
+
             return (
               <motion.div 
                 key={letter} 
@@ -227,7 +235,7 @@ export default function GameBoard({ gameType, gameState, onMove, disabled, user 
               >
                 <Button
                   onClick={() => onMove({ letter })}
-                  disabled={disabled || isGuessed || !gameState.isYourTurn?.(user?.id) || gameState.gameOver}
+                  disabled={disabled || isGuessed || !isYourTurn || currentGameState.gameOver}
                   className={`arcade-border p-2 font-pixel text-sm transition-all duration-300 ${
                     isGuessed 
                       ? isInWord 
@@ -243,6 +251,11 @@ export default function GameBoard({ gameType, gameState, onMove, disabled, user 
             );
           })}
         </div>
+        {currentGameState.guessedLetters && currentGameState.guessedLetters.length > 0 && (
+            <div className="text-xs text-gray-400">
+              Guessed: {currentGameState.guessedLetters.join(', ')}
+            </div>
+          )}
       </div>
     );
   };

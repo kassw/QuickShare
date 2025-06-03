@@ -102,14 +102,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { gameType, stake, userId } = req.body;
       const playerId = userId || guestUser.id;
-      
+
       // Check for existing waiting matches
       const waitingMatches = await storage.getWaitingMatches(gameType, stake);
-      
+
       if (waitingMatches.length > 0) {
         // Join existing match
         const match = waitingMatches[0];
-        
+
         if (match.player1Id === playerId) {
           // Can't join your own match, create a new one
           const newMatch = await storage.createMatch({
@@ -118,30 +118,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
             player1Id: playerId,
             player2Id: null
           });
-          
+
           userMatches.set(playerId, newMatch.id);
           res.json(newMatch);
           return;
         }
-        
+
         // Create proper initial game state with currentPlayer
         const initialGameState = createInitialGameState(gameType, match.player1Id, playerId);
-        
+
         const updatedMatch = await storage.updateMatch(match.id, {
           player2Id: playerId,
           state: "in_progress",
           gameData: JSON.stringify(initialGameState)
         });
-        
+
         userMatches.set(playerId, match.id);
-        
-        // Notify both players
+
+        // Notify both players that match was found
         broadcastToMatch(match.id, {
           type: 'match_found',
           matchId: match.id,
           gameState: initialGameState
         });
-        
+
+        // Send initial game state with proper turn information
+        setTimeout(() => {
+          broadcastToMatch(match.id, {
+            type: 'game_update',
+            gameState: initialGameState,
+            currentPlayer: initialGameState.currentPlayer,
+            moveNumber: 0
+          });
+        }, 100);
+
         res.json(updatedMatch);
       } else {
         // Create new match
@@ -151,7 +161,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           player1Id: playerId,
           player2Id: null
         });
-        
+
         userMatches.set(playerId, match.id);
         res.json(match);
       }
@@ -166,14 +176,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/transactions", async (req, res) => {
     try {
       const { type, amount, description } = req.body;
-      
+
       const transaction = await storage.createTransaction({
         userId: guestUser.id,
         type,
         amount,
         description
       });
-      
+
       // Update user balance for mock transactions
       if (type === "deposit") {
         const currentBalance = parseFloat(guestUser.balance ?? '0');
@@ -186,7 +196,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const updatedUser = await storage.updateUserBalance(guestUser.id, newBalance);
         guestUser = updatedUser || guestUser;
       }
-      
+
       res.json(transaction);
     } catch (error) {
       res.status(500).json({ error: "Failed to create transaction" });
@@ -199,7 +209,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   wss.on('connection', async (ws: WebSocket) => {
     const connectionId = `conn_${++connectionCounter}`;
     const sessionUser = await createUserSession();
-    
+
     connectedClients.set(connectionId, ws);
     userConnections.set(sessionUser.id, connectionId);
     connectionUsers.set(connectionId, sessionUser.id);
@@ -213,7 +223,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     ws.on('message', async (data: Buffer) => {
       try {
         const message: WSMessage = JSON.parse(data.toString());
-        
+
         switch (message.type) {
           case 'join_match':
             if (message.matchId) {
@@ -251,7 +261,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const moves = await storage.getMatchMoves(matchId);
-      
+
       // For turn-based games, validate turn order (player2 now goes first)
       if (match.gameType !== 'rps') {
         // Player 2 starts first, so:
@@ -436,7 +446,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   async function processGameMove(match: any, move: any, allMoves: any[], playerId: string) {
     const gameType = match.gameType;
-    
+
     switch (gameType) {
       case 'rps':
         return processRPSMove(match, move, allMoves, playerId);
@@ -462,17 +472,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // Check if both players have moved
     const player1Id = match.player1Id;
     const player2Id = match.player2Id;
-    
+
     if (player1Id && player2Id && playerMoves[player1Id] && playerMoves[player2Id]) {
       const move1 = playerMoves[player1Id];
       const move2 = playerMoves[player2Id];
-      
+
       const result = evaluateRPS(move1, move2);
       let winnerId = null;
-      
+
       if (result === 'player1') winnerId = player1Id;
       else if (result === 'player2') winnerId = player2Id;
-      
+
       return {
         finished: true,
         gameState: { 
@@ -485,7 +495,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         winnerId
       };
     }
-    
+
     return {
       finished: false,
       gameState: { 
@@ -501,7 +511,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const board = Array(9).fill(null);
     const player1Id = match.player1Id;
     const player2Id = match.player2Id;
-    
+
     // Apply all moves to board (Player 1 = X, Player 2 = O)
     allMoves.forEach((move, index) => {
       const data = JSON.parse(move.moveData);
@@ -511,19 +521,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         board[data.position] = symbol;
       }
     });
-    
+
     const winner = checkTicTacToeWinner(board);
     const finished = winner !== null || !board.includes(null);
-    
+
     let winnerId = null;
     if (winner === 'X') winnerId = player1Id;
     else if (winner === 'O') winnerId = player2Id;
-    
+
     // Next player: since player2 starts first, after each move we alternate
     // After move 0 (player2): player1 goes next
     // After move 1 (player1): player2 goes next
     const nextPlayer = finished ? null : (allMoves.length % 2 === 0 ? player1Id : player2Id);
-    
+
     return {
       finished,
       gameState: { 
@@ -541,13 +551,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     let sticks = 21;
     const player1Id = match.player1Id;
     const player2Id = match.player2Id;
-    
+
     // Apply all moves
     allMoves.forEach(move => {
       const data = JSON.parse(move.moveData);
       sticks -= data.take;
     });
-    
+
     if (sticks <= 0) {
       // Player who took the last stick loses
       const winnerId = playerId === player1Id ? player2Id : player1Id;
@@ -562,10 +572,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         winnerId
       };
     }
-    
+
     // Next player: since player2 starts first, after each move we alternate
     const nextPlayer = allMoves.length % 2 === 0 ? player1Id : player2Id;
-    
+
     return {
       finished: false,
       gameState: { 
@@ -584,11 +594,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const word = gameState.word || words[Math.floor(Math.random() * words.length)];
     const player1Id = match.player1Id;
     const player2Id = match.player2Id;
-    
+
     // Build guessed letters from all moves, avoiding duplicates
     const guessedLetters: string[] = [];
     let wrongGuesses = 0;
-    
+
     allMoves.forEach(move => {
       const data = JSON.parse(move.moveData);
       const letter = data.letter?.toUpperCase();
@@ -599,14 +609,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
     });
-    
+
     const wordLetters = word.toUpperCase().split('');
     const isComplete = wordLetters.every((letter: string) => guessedLetters.includes(letter));
     const failed = wrongGuesses >= 6;
-    
+
     // Next player: since player2 starts first, after each move we alternate
     const nextPlayer = (isComplete || failed) ? null : (allMoves.length % 2 === 0 ? player1Id : player2Id);
-    
+
     let winnerId = null;
     if (isComplete) {
       // Player who completed the word wins
@@ -615,11 +625,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Both players lose if they fail to guess the word - it's a draw
       winnerId = null;
     }
-    
+
     const displayWord = wordLetters.map((letter: string) => 
       guessedLetters.includes(letter) ? letter : '_'
     ).join(' ');
-    
+
     return {
       finished: isComplete || failed,
       gameState: { 
@@ -654,7 +664,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       [0, 3, 6], [1, 4, 7], [2, 5, 8],
       [0, 4, 8], [2, 4, 6]
     ];
-    
+
     for (const [a, b, c] of lines) {
       if (board[a] && board[a] === board[b] && board[a] === board[c]) {
         return board[a];
@@ -671,12 +681,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const currentBalance = parseFloat(user.balance || "0");
     let newBalance = currentBalance;
     let earnedAmount = "0";
-    
+
     if (won) {
       const winnings = stakeAmount * 1.9; // 90% of double stake (10% fee)
       newBalance += winnings;
       earnedAmount = winnings.toFixed(2);
-      
+
       await storage.createTransaction({
         userId,
         type: "win",
@@ -685,7 +695,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } else {
       newBalance -= stakeAmount;
-      
+
       await storage.createTransaction({
         userId,
         type: "lose",
@@ -693,9 +703,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         description: "Game stake lost"
       });
     }
-    
+
     await storage.updateUserBalance(userId, newBalance.toFixed(2));
-    
+
     // Update stats
     const stats = await storage.getUserStats(userId);
     await storage.updateUserStats(userId, {

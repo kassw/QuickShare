@@ -31,6 +31,7 @@ export default function GameInterface({
 }: GameInterfaceProps) {
   const [gameStatus, setGameStatus] = useState("Finding opponent...");
   const [showPlayAgain, setShowPlayAgain] = useState(false);
+  const [serverGameState, setServerGameState] = useState(null);
   
   const {
     gameState,
@@ -54,12 +55,23 @@ export default function GameInterface({
       switch (message.type) {
         case 'match_found':
           setGameStatus("Opponent found! Game starting...");
-          setTimeout(() => {
-            setGameStatus("Your turn");
-          }, 1500);
           break;
         case 'game_update':
-          setGameStatus("Opponent's turn");
+          // Update local game state with server state
+          if (message.gameState) {
+            setServerGameState(message.gameState);
+            
+            // Check if it's your turn based on the current player
+            const isYourTurn = message.gameState.currentPlayer === user?.id;
+            
+            if (match.gameType === 'rps') {
+              setGameStatus("Choose your move");
+            } else if (isYourTurn) {
+              setGameStatus("Your turn");
+            } else {
+              setGameStatus("Opponent's turn");
+            }
+          }
           break;
         case 'game_result':
           const resultText = message.result === 'win' ? '🎉 You Won!' : 
@@ -69,7 +81,7 @@ export default function GameInterface({
           break;
       }
     }
-  }, [lastMessage]);
+  }, [lastMessage, user?.id, match.gameType]);
 
   const handleMove = (move: any) => {
     console.log('Sending move:', move);
@@ -138,6 +150,7 @@ export default function GameInterface({
             <GameBoard
               gameType={match.gameType}
               gameState={gameState}
+              serverGameState={serverGameState}
               onMove={handleMove}
               disabled={match.state !== 'in_progress' || isGameFinished}
               user={user}
