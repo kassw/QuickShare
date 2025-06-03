@@ -377,9 +377,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       case 'tictactoe':
         return { 
           board: Array(9).fill(null), 
-          currentPlayer: player1Id,
+          currentPlayer: player2Id,
           winner: null,
-          isYourTurn: (userId: string) => userId === player1Id,
+          isYourTurn: (userId: string) => userId === player2Id,
           playerSymbol: (userId: string) => userId === player1Id ? 'X' : 'O'
         };
       case 'sticks':
