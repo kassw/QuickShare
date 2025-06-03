@@ -276,11 +276,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // For RPS, allow both players to make moves but prevent duplicate moves
+      // For RPS, allow players to change moves until both have submitted
       if (match.gameType === 'rps') {
-        const playerHasMoved = moves.some(m => m.playerId === playerId);
-        if (playerHasMoved) {
-          console.log(`Player ${playerId} has already moved in RPS match ${matchId}`);
+        // Check if both players have already made their final moves
+        const player1Moves = moves.filter(m => m.playerId === match.player1Id);
+        const player2Moves = moves.filter(m => m.playerId === match.player2Id);
+        
+        if (player1Moves.length > 0 && player2Moves.length > 0) {
+          console.log(`Both players have already moved in RPS match ${matchId}`);
           return;
         }
       }
@@ -462,17 +465,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
   }
 
   function processRPSMove(match: any, moveData: any, allMoves: any[], playerId: string) {
-    // Build current state from all moves
+    // Build current state from latest moves for each player
     const playerMoves: Record<string, string> = {};
-    allMoves.forEach(move => {
-      const data = JSON.parse(move.moveData);
-      playerMoves[move.playerId] = data.move;
-    });
-
-    // Check if both players have moved
+    
+    // Get the latest move for each player
     const player1Id = match.player1Id;
     const player2Id = match.player2Id;
+    
+    const player1Moves = allMoves.filter(m => m.playerId === player1Id);
+    const player2Moves = allMoves.filter(m => m.playerId === player2Id);
+    
+    if (player1Moves.length > 0) {
+      const latestP1Move = player1Moves[player1Moves.length - 1];
+      const data = JSON.parse(latestP1Move.moveData);
+      playerMoves[player1Id] = data.move;
+    }
+    
+    if (player2Moves.length > 0) {
+      const latestP2Move = player2Moves[player2Moves.length - 1];
+      const data = JSON.parse(latestP2Move.moveData);
+      playerMoves[player2Id] = data.move;
+    }
 
+    // Check if both players have moved
     if (player1Id && player2Id && playerMoves[player1Id] && playerMoves[player2Id]) {
       const move1 = playerMoves[player1Id];
       const move2 = playerMoves[player2Id];
@@ -597,7 +612,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     // Build guessed letters from all moves, avoiding duplicates
     const guessedLetters: string[] = [];
-    let wrongGuesses = 0;
+    const player1WrongGuesses: string[] = [];
+    const player2WrongGuesses: string[] = [];
 
     allMoves.forEach(move => {
       const data = JSON.parse(move.moveData);
@@ -605,25 +621,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (letter && !guessedLetters.includes(letter)) {
         guessedLetters.push(letter);
         if (!word.toUpperCase().includes(letter)) {
-          wrongGuesses++;
+          // Track wrong guesses per player
+          if (move.playerId === player1Id) {
+            player1WrongGuesses.push(letter);
+          } else if (move.playerId === player2Id) {
+            player2WrongGuesses.push(letter);
+          }
         }
       }
     });
 
     const wordLetters = word.toUpperCase().split('');
     const isComplete = wordLetters.every((letter: string) => guessedLetters.includes(letter));
-    const failed = wrongGuesses >= 6;
+    
+    // Game ends if word is complete OR if the current player has 6 wrong guesses
+    const currentPlayerWrongCount = playerId === player1Id ? player1WrongGuesses.length : player2WrongGuesses.length;
+    const playerFailed = currentPlayerWrongCount >= 6;
 
     // Next player: since player2 starts first, after each move we alternate
-    const nextPlayer = (isComplete || failed) ? null : (allMoves.length % 2 === 0 ? player2Id : player1Id);
+    const nextPlayer = (isComplete || playerFailed) ? null : (allMoves.length % 2 === 0 ? player2Id : player1Id);
 
     let winnerId = null;
     if (isComplete) {
       // Player who completed the word wins
       winnerId = playerId;
-    } else if (failed) {
-      // Both players lose if they fail to guess the word - it's a draw
-      winnerId = null;
+    } else if (playerFailed) {
+      // The other player wins if current player failed
+      winnerId = playerId === player1Id ? player2Id : player1Id;
     }
 
     const displayWord = wordLetters.map((letter: string) => 
@@ -631,18 +655,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     ).join(' ');
 
     return {
-      finished: isComplete || failed,
+      finished: isComplete || playerFailed,
       gameState: { 
         word: word, // Always include word
         guessedLetters, 
-        wrongGuesses, 
+        wrongGuesses: currentPlayerWrongCount, // Show current player's wrong guess count
+        player1WrongGuesses: player1WrongGuesses.length,
+        player2WrongGuesses: player2WrongGuesses.length,
         currentPlayer: nextPlayer,
-        isYourTurn: (userId: string) => !isComplete && !failed && nextPlayer === userId,
+        isYourTurn: (userId: string) => !isComplete && !playerFailed && nextPlayer === userId,
         displayWord,
         maxWrongGuesses: 6,
-        gameOver: isComplete || failed,
+        gameOver: isComplete || playerFailed,
         won: isComplete,
-        lost: failed
+        lost: playerFailed && playerId === (nextPlayer === player1Id ? player2Id : player1Id)
       },
       winnerId
     };
