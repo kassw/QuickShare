@@ -14,6 +14,8 @@ import {
   type InsertTransaction,
   type UserStats
 } from "@shared/schema";
+import { db } from "./db";
+import { eq, and, isNull } from "drizzle-orm";
 
 export interface IStorage {
   // User operations
@@ -44,170 +46,129 @@ export interface IStorage {
   getOrCreateGuestUser(): Promise<User>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<string, User>;
-  private matches: Map<string, GameMatch>;
-  private moves: Map<string, GameMove>;
-  private transactions: Map<string, Transaction>;
-  private stats: Map<string, UserStats>;
-  private currentId: number;
-
-  constructor() {
-    this.users = new Map();
-    this.matches = new Map();
-    this.moves = new Map();
-    this.transactions = new Map();
-    this.stats = new Map();
-    this.currentId = 1;
-  }
-
-  private generateId(): string {
-    return `${this.currentId++}`;
-  }
-
+export class DatabaseStorage implements IStorage {
   async getUser(id: string): Promise<User | undefined> {
-    return this.users.get(id);
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user || undefined;
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user || undefined;
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const id = this.generateId();
-    const user: User = { 
-      ...insertUser, 
-      id,
-      balance: "1337.50",
-      createdAt: new Date()
-    };
-    this.users.set(id, user);
+    const [user] = await db
+      .insert(users)
+      .values(insertUser)
+      .returning();
     
     // Create initial stats
-    const userStats: UserStats = {
-      id: this.generateId(),
-      userId: id,
+    await db.insert(userStats).values({
+      userId: user.id,
       totalGames: 0,
       totalWins: 0,
       totalLosses: 0,
       totalEarned: "0",
       gamesPlayed: "{}",
-      updatedAt: new Date()
-    };
-    this.stats.set(id, userStats);
+    });
     
     return user;
   }
 
   async updateUserBalance(id: string, balance: string): Promise<User | undefined> {
-    const user = this.users.get(id);
-    if (!user) return undefined;
-    
-    const updatedUser = { ...user, balance };
-    this.users.set(id, updatedUser);
-    return updatedUser;
+    const [user] = await db
+      .update(users)
+      .set({ balance })
+      .where(eq(users.id, id))
+      .returning();
+    return user || undefined;
   }
 
   async createMatch(match: InsertGameMatch): Promise<GameMatch> {
-    const id = this.generateId();
-    const gameMatch: GameMatch = {
-      ...match,
-      id,
-      state: "waiting",
-      winnerId: null,
-      gameData: null,
-      createdAt: new Date(),
-      finishedAt: null
-    };
-    this.matches.set(id, gameMatch);
+    const [gameMatch] = await db
+      .insert(gameMatches)
+      .values(match)
+      .returning();
     return gameMatch;
   }
 
   async getMatch(id: string): Promise<GameMatch | undefined> {
-    return this.matches.get(id);
+    const [match] = await db.select().from(gameMatches).where(eq(gameMatches.id, id));
+    return match || undefined;
   }
 
   async updateMatch(id: string, updates: Partial<GameMatch>): Promise<GameMatch | undefined> {
-    const match = this.matches.get(id);
-    if (!match) return undefined;
-    
-    const updatedMatch = { ...match, ...updates };
-    this.matches.set(id, updatedMatch);
-    return updatedMatch;
+    const [match] = await db
+      .update(gameMatches)
+      .set(updates)
+      .where(eq(gameMatches.id, id))
+      .returning();
+    return match || undefined;
   }
 
   async getWaitingMatches(gameType: string, stake: string): Promise<GameMatch[]> {
-    return Array.from(this.matches.values()).filter(
-      match => match.gameType === gameType && 
-               match.stake === stake && 
-               match.state === "waiting" &&
-               !match.player2Id
-    );
+    return await db
+      .select()
+      .from(gameMatches)
+      .where(
+        and(
+          eq(gameMatches.gameType, gameType),
+          eq(gameMatches.stake, stake),
+          eq(gameMatches.state, "waiting"),
+          isNull(gameMatches.player2Id)
+        )
+      );
   }
 
   async createMove(move: InsertGameMove): Promise<GameMove> {
-    const id = this.generateId();
-    const gameMove: GameMove = {
-      ...move,
-      id,
-      createdAt: new Date()
-    };
-    this.moves.set(id, gameMove);
+    const [gameMove] = await db
+      .insert(gameMoves)
+      .values(move)
+      .returning();
     return gameMove;
   }
 
   async getMatchMoves(matchId: string): Promise<GameMove[]> {
-    return Array.from(this.moves.values()).filter(
-      move => move.matchId === matchId
-    ).sort((a, b) => a.moveNumber - b.moveNumber);
+    return await db
+      .select()
+      .from(gameMoves)
+      .where(eq(gameMoves.matchId, matchId))
+      .orderBy(gameMoves.moveNumber);
   }
 
   async createTransaction(transaction: InsertTransaction): Promise<Transaction> {
-    const id = this.generateId();
-    const tx: Transaction = {
-      ...transaction,
-      id,
-      status: "completed",
-      externalId: null,
-      createdAt: new Date()
-    };
-    this.transactions.set(id, tx);
+    const [tx] = await db
+      .insert(transactions)
+      .values(transaction)
+      .returning();
     return tx;
   }
 
   async getUserTransactions(userId: string): Promise<Transaction[]> {
-    return Array.from(this.transactions.values()).filter(
-      tx => tx.userId === userId
-    ).sort((a, b) => b.createdAt!.getTime() - a.createdAt!.getTime());
+    return await db
+      .select()
+      .from(transactions)
+      .where(eq(transactions.userId, userId))
+      .orderBy(transactions.createdAt);
   }
 
   async getUserStats(userId: string): Promise<UserStats | undefined> {
-    return this.stats.get(userId);
+    const [stats] = await db.select().from(userStats).where(eq(userStats.userId, userId));
+    return stats || undefined;
   }
 
   async updateUserStats(userId: string, updates: Partial<UserStats>): Promise<UserStats> {
-    const stats = this.stats.get(userId) || {
-      id: this.generateId(),
-      userId,
-      totalGames: 0,
-      totalWins: 0,
-      totalLosses: 0,
-      totalEarned: "0",
-      gamesPlayed: "{}",
-      updatedAt: new Date()
-    };
-    
-    const updatedStats = { ...stats, ...updates, updatedAt: new Date() };
-    this.stats.set(userId, updatedStats);
-    return updatedStats;
+    const [stats] = await db
+      .update(userStats)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(userStats.userId, userId))
+      .returning();
+    return stats;
   }
 
   async getOrCreateGuestUser(): Promise<User> {
-    const existingGuest = Array.from(this.users.values()).find(
-      user => user.username === "guest" && user.authProvider === "guest"
-    );
+    const existingGuest = await this.getUserByUsername("guest");
     
     if (existingGuest) {
       return existingGuest;
@@ -222,4 +183,4 @@ export class MemStorage implements IStorage {
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();

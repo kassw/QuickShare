@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
 import { z } from "zod";
+import type { User } from "@shared/schema";
 
 // WebSocket message types
 type WSMessage = {
@@ -16,6 +17,9 @@ type WSMessage = {
 
 const connectedClients = new Map<string, WebSocket>();
 const userMatches = new Map<string, string>(); // userId -> matchId
+const userConnections = new Map<string, string>(); // userId -> websocket connection id
+const connectionUsers = new Map<string, string>(); // websocket connection id -> userId
+let connectionCounter = 0;
 
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
@@ -23,21 +27,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Initialize guest user
   let guestUser = await storage.getOrCreateGuestUser();
 
+  // Create unique user sessions for each connection
+  const createUserSession = async (): Promise<User> => {
+    const sessionId = `player_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    return await storage.createUser({
+      username: sessionId,
+      nickname: `Player${Math.floor(Math.random() * 9999)}`,
+      email: `${sessionId}@retrogame.com`,
+      authProvider: "session"
+    });
+  };
+
   // API Routes
-  app.get("/api/user", async (req, res) => {
-    const user = await storage.getUser(guestUser.id);
-    const stats = await storage.getUserStats(guestUser.id);
+  app.get("/api/user/:userId?", async (req, res) => {
+    const userId = req.params.userId || guestUser.id;
+    const user = await storage.getUser(userId);
+    const stats = await storage.getUserStats(userId);
     res.json({ user, stats });
   });
 
-  app.get("/api/user/transactions", async (req, res) => {
-    const transactions = await storage.getUserTransactions(guestUser.id);
+  app.get("/api/user/:userId/transactions", async (req, res) => {
+    const userId = req.params.userId || guestUser.id;
+    const transactions = await storage.getUserTransactions(userId);
     res.json(transactions);
   });
 
   app.post("/api/matches", async (req, res) => {
     try {
-      const { gameType, stake } = req.body;
+      const { gameType, stake, userId } = req.body;
+      const playerId = userId || guestUser.id;
       
       // Check for existing waiting matches
       const waitingMatches = await storage.getWaitingMatches(gameType, stake);
@@ -45,12 +63,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (waitingMatches.length > 0) {
         // Join existing match
         const match = waitingMatches[0];
+        
+        if (match.player1Id === playerId) {
+          // Can't join your own match, create a new one
+          const newMatch = await storage.createMatch({
+            gameType,
+            stake,
+            player1Id: playerId,
+            player2Id: null
+          });
+          
+          userMatches.set(playerId, newMatch.id);
+          res.json(newMatch);
+          return;
+        }
+        
         const updatedMatch = await storage.updateMatch(match.id, {
-          player2Id: guestUser.id,
-          state: "in_progress"
+          player2Id: playerId,
+          state: "in_progress",
+          gameData: JSON.stringify(initializeGameState(gameType))
         });
         
-        userMatches.set(guestUser.id, match.id);
+        userMatches.set(playerId, match.id);
         
         // Notify both players
         broadcastToMatch(match.id, {
@@ -65,14 +99,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const match = await storage.createMatch({
           gameType,
           stake,
-          player1Id: guestUser.id,
+          player1Id: playerId,
           player2Id: null
         });
         
-        userMatches.set(guestUser.id, match.id);
+        userMatches.set(playerId, match.id);
         res.json(match);
       }
     } catch (error) {
+      console.error('Match creation error:', error);
       res.status(500).json({ error: "Failed to create/join match" });
     }
   });
@@ -160,9 +195,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // WebSocket server
   const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
 
-  wss.on('connection', (ws: WebSocket) => {
-    const clientId = guestUser.id;
-    connectedClients.set(clientId, ws);
+  wss.on('connection', async (ws: WebSocket) => {
+    const connectionId = `conn_${++connectionCounter}`;
+    const sessionUser = await createUserSession();
+    
+    connectedClients.set(connectionId, ws);
+    userConnections.set(sessionUser.id, connectionId);
+    connectionUsers.set(connectionId, sessionUser.id);
+
+    // Send user data to client
+    ws.send(JSON.stringify({
+      type: 'user_session',
+      user: sessionUser
+    }));
 
     ws.on('message', async (data: Buffer) => {
       try {
@@ -171,11 +216,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         switch (message.type) {
           case 'join_match':
             if (message.matchId) {
-              userMatches.set(clientId, message.matchId);
+              userMatches.set(sessionUser.id, message.matchId);
             }
             break;
           case 'leave_match':
-            userMatches.delete(clientId);
+            userMatches.delete(sessionUser.id);
+            break;
+          case 'make_move':
+            if (message.matchId && message.move) {
+              await handleGameMove(message.matchId, sessionUser.id, message.move);
+            }
             break;
         }
       } catch (error) {
@@ -184,10 +234,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
 
     ws.on('close', () => {
-      connectedClients.delete(clientId);
-      userMatches.delete(clientId);
+      connectedClients.delete(connectionId);
+      userMatches.delete(sessionUser.id);
+      userConnections.delete(sessionUser.id);
+      connectionUsers.delete(connectionId);
     });
   });
+
+  async function handleGameMove(matchId: string, playerId: string, move: any) {
+    try {
+      const match = await storage.getMatch(matchId);
+      if (!match || match.state !== 'in_progress') return;
+
+      const moves = await storage.getMatchMoves(matchId);
+      const moveNumber = moves.length + 1;
+
+      await storage.createMove({
+        matchId,
+        playerId,
+        moveData: JSON.stringify(move),
+        moveNumber
+      });
+
+      // Get updated moves
+      const allMoves = await storage.getMatchMoves(matchId);
+      const gameResult = await processGameMove(match, move, allMoves, playerId);
+
+      if (gameResult.finished) {
+        await storage.updateMatch(matchId, {
+          state: "finished",
+          winnerId: gameResult.winnerId,
+          finishedAt: new Date(),
+          gameData: JSON.stringify(gameResult.gameState)
+        });
+
+        // Update user stats and balance for both players
+        if (match.player1Id) await updateUserAfterGame(gameResult.winnerId === match.player1Id, match.stake, match.player1Id);
+        if (match.player2Id) await updateUserAfterGame(gameResult.winnerId === match.player2Id, match.stake, match.player2Id);
+
+        broadcastToMatch(matchId, {
+          type: 'game_result',
+          result: gameResult.winnerId === playerId ? 'win' : 
+                  gameResult.winnerId ? 'lose' : 'draw',
+          gameState: gameResult.gameState,
+          winnerId: gameResult.winnerId
+        });
+      } else {
+        broadcastToMatch(matchId, {
+          type: 'game_update',
+          gameState: gameResult.gameState
+        });
+      }
+    } catch (error) {
+      console.error('Game move error:', error);
+    }
+  }
 
   function broadcastToMatch(matchId: string, message: WSMessage) {
     for (const [userId, userMatchId] of userMatches.entries()) {

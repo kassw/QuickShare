@@ -11,7 +11,7 @@ export const users = pgTable("users", {
   balance: numeric("balance", { precision: 18, scale: 8 }).default("1337.50"),
   createdAt: timestamp("created_at").defaultNow(),
 });
-
+ 
 export const gameMatches = pgTable("game_matches", {
   id: uuid("id").primaryKey().defaultRandom(),
   gameType: text("game_type").notNull(), // rps, tictactoe, sticks, hangman
