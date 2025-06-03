@@ -252,9 +252,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const moves = await storage.getMatchMoves(matchId);
       
-      // For turn-based games, validate turn order (player1 always goes first)
+      // For turn-based games, validate turn order (player2 now goes first)
       if (match.gameType !== 'rps') {
-        const expectedPlayer = moves.length % 2 === 0 ? match.player1Id : match.player2Id;
+        const expectedPlayer = moves.length % 2 === 0 ? match.player2Id : match.player1Id;
         if (playerId !== expectedPlayer) {
           console.log(`Not ${playerId}'s turn. Expected: ${expectedPlayer} (Player ${expectedPlayer === match.player1Id ? '1' : '2'}), Move #${moves.length + 1}`);
           return;
@@ -385,9 +385,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       case 'sticks':
         return { 
           sticks: 21, 
-          currentPlayer: player1Id,
+          currentPlayer: player2Id,
           lastPlayer: null,
-          isYourTurn: (userId: string) => userId === player1Id
+          isYourTurn: (userId: string) => userId === player2Id
         };
       case 'hangman':
         const words = ['BLOCKCHAIN', 'CRYPTOCURRENCY', 'ARCADE', 'RETRO', 'GAMING', 'PIXEL', 'NEON'];
@@ -396,13 +396,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           word,
           guessedLetters: [],
           wrongGuesses: 0,
-          currentPlayer: player1Id,
+          currentPlayer: player2Id,
           displayWord: word.split('').map(() => '_').join(' '),
           maxWrongGuesses: 6,
           gameOver: false,
           won: false,
           lost: false,
-          isYourTurn: (userId: string) => userId === player1Id
+          isYourTurn: (userId: string) => userId === player2Id
         };
       default:
         return {};
@@ -514,8 +514,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (winner === 'X') winnerId = player1Id;
     else if (winner === 'O') winnerId = player2Id;
     
-    // Next player: if we have even number of moves, player1 goes next
-    const nextPlayer = finished ? null : (allMoves.length % 2 === 0 ? player1Id : player2Id);
+    // Next player: if we have even number of moves, player2 goes next (since player2 starts)
+    const nextPlayer = finished ? null : (allMoves.length % 2 === 0 ? player2Id : player1Id);
     
     return {
       finished,
@@ -556,8 +556,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
     }
     
-    // Next player: if we have even number of moves, player1 goes next
-    const nextPlayer = allMoves.length % 2 === 0 ? player1Id : player2Id;
+    // Next player: if we have even number of moves, player2 goes next (since player2 starts)
+    const nextPlayer = allMoves.length % 2 === 0 ? player2Id : player1Id;
     
     return {
       finished: false,
@@ -597,8 +597,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const isComplete = wordLetters.every((letter: string) => guessedLetters.includes(letter));
     const failed = wrongGuesses >= 6;
     
-    // Next player: if we have even number of moves, player1 goes next
-    const nextPlayer = (isComplete || failed) ? null : (allMoves.length % 2 === 0 ? player1Id : player2Id);
+    // Next player: if we have even number of moves, player2 goes next (since player2 starts)
+    const nextPlayer = (isComplete || failed) ? null : (allMoves.length % 2 === 0 ? player2Id : player1Id);
     
     let winnerId = null;
     if (isComplete) {
