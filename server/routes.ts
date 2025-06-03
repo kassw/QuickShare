@@ -254,6 +254,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // For turn-based games, validate turn order (player2 now goes first)
       if (match.gameType !== 'rps') {
+        // Player 2 starts first, so:
+        // Move 0: Player 2's turn
+        // Move 1: Player 1's turn  
+        // Move 2: Player 2's turn
+        // etc.
         const expectedPlayer = moves.length % 2 === 0 ? match.player2Id : match.player1Id;
         if (playerId !== expectedPlayer) {
           console.log(`Not ${playerId}'s turn. Expected: ${expectedPlayer} (Player ${expectedPlayer === match.player1Id ? '1' : '2'}), Move #${moves.length + 1}`);
@@ -514,8 +519,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (winner === 'X') winnerId = player1Id;
     else if (winner === 'O') winnerId = player2Id;
     
-    // Next player: if we have even number of moves, player2 goes next (since player2 starts)
-    const nextPlayer = finished ? null : (allMoves.length % 2 === 0 ? player2Id : player1Id);
+    // Next player: since player2 starts first, after each move we alternate
+    // After move 0 (player2): player1 goes next
+    // After move 1 (player1): player2 goes next
+    const nextPlayer = finished ? null : (allMoves.length % 2 === 0 ? player1Id : player2Id);
     
     return {
       finished,
@@ -556,8 +563,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
     }
     
-    // Next player: if we have even number of moves, player2 goes next (since player2 starts)
-    const nextPlayer = allMoves.length % 2 === 0 ? player2Id : player1Id;
+    // Next player: since player2 starts first, after each move we alternate
+    const nextPlayer = allMoves.length % 2 === 0 ? player1Id : player2Id;
     
     return {
       finished: false,
@@ -597,8 +604,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const isComplete = wordLetters.every((letter: string) => guessedLetters.includes(letter));
     const failed = wrongGuesses >= 6;
     
-    // Next player: if we have even number of moves, player2 goes next (since player2 starts)
-    const nextPlayer = (isComplete || failed) ? null : (allMoves.length % 2 === 0 ? player2Id : player1Id);
+    // Next player: since player2 starts first, after each move we alternate
+    const nextPlayer = (isComplete || failed) ? null : (allMoves.length % 2 === 0 ? player1Id : player2Id);
     
     let winnerId = null;
     if (isComplete) {
