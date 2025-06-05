@@ -13,6 +13,7 @@ import {
   Plus,
   Minus
 } from "lucide-react";
+import gameIcons from "@/data/gameIcons.json";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -407,8 +408,13 @@ export default function GamePlatform() {
                       >
                         <CardContent className="p-6 text-center">
                           <div className="mb-4">
-                            <div className="w-full  bg-retro-dark rounded-lg mb-4 flex items-center justify-center">
-                              <Gamepad2 className={`text-${data.color} text-4xl`} />
+                            <div className="w-full h-16 bg-retro-dark rounded-lg mb-4 flex items-center justify-center">
+                              <div 
+                                className={`text-${data.color} w-10 h-10`}
+                                dangerouslySetInnerHTML={{ 
+                                  __html: gameIcons[gameType as keyof typeof gameIcons] 
+                                }}
+                              />
                             </div>
                           </div>
                           <h4 className={`font-pixel text-${data.color} text-sm mb-2`}>
