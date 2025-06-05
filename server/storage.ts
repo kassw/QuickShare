@@ -176,7 +176,7 @@ export class DatabaseStorage implements IStorage {
     
     return this.createUser({
       username: "guest",
-      nickname: "Player1337",
+      nickname: "Retro-Player",
       email: "guest@retrogame.com",
       authProvider: "guest"
     });
