@@ -146,7 +146,7 @@ export default function GameInterface({
           </div>
 
           {/* Game Board */}
-          <div className="min-h-96 flex items-center justify-center">
+          <div className="min-h-96 flex items-center">
             <GameBoard
               gameType={match.gameType}
               gameState={gameState}
