@@ -9,18 +9,27 @@ if (!process.env.DATABASE_URL) {
   );
 }
 
-// Configure MySQL connection pool with proper SSL settings
+// Parse the DATABASE_URL to extract connection details
+const url = new URL(process.env.DATABASE_URL);
+
+// Configure MySQL connection pool with proper settings
 export const connection = mysql.createPool({
-  uri: process.env.DATABASE_URL,
+  host: url.hostname,
+  port: parseInt(url.port) || 3306,
+  user: url.username,
+  password: url.password,
+  database: url.pathname.slice(1), // Remove leading slash
   ssl: {
     rejectUnauthorized: false
   },
   connectionLimit: 10,
+  queueLimit: 0,
+  reconnect: true,
   acquireTimeout: 60000,
   timeout: 60000,
 });
 
 export const db = drizzle(connection, { 
   schema,
-  mode: "default" // This fixes the Drizzle mode error
+  mode: "default"
 });
