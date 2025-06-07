@@ -3,30 +3,25 @@ import { drizzle } from 'drizzle-orm/mysql2';
 import mysql from 'mysql2/promise';
 import * as schema from "@shared/schema";
 
-if (!process.env.DATABASE_URL) {
+if (!process.env.DB_HOST || !process.env.DB_USER || !process.env.DB_PASSWORD || !process.env.DB_NAME) {
   throw new Error(
-    "DATABASE_URL must be set. Did you forget to provision a database?",
+    "Database connection parameters must be set. Check DB_HOST, DB_USER, DB_PASSWORD, and DB_NAME environment variables.",
   );
 }
 
-// Parse the DATABASE_URL to extract connection details
-const url = new URL(process.env.DATABASE_URL);
-
-// Configure MySQL connection pool with proper settings
+// Configure MySQL connection pool with individual parameters
 export const connection = mysql.createPool({
-  host: url.hostname,
-  port: parseInt(url.port) || 3306,
-  user: url.username,
-  password: url.password,
-  database: url.pathname.slice(1), // Remove leading slash
+  host: process.env.DB_HOST,
+  port: parseInt(process.env.DB_PORT || '3306'),
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME,
   ssl: {
     rejectUnauthorized: false
   },
   connectionLimit: 10,
+  waitForConnections: true,
   queueLimit: 0,
-  reconnect: true,
-  acquireTimeout: 60000,
-  timeout: 60000,
 });
 
 export const db = drizzle(connection, { 

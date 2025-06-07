@@ -1,8 +1,8 @@
 
 import { defineConfig } from "drizzle-kit";
 
-if (!process.env.DATABASE_URL) {
-  throw new Error("DATABASE_URL, ensure the database is provisioned");
+if (!process.env.DB_HOST || !process.env.DB_USER || !process.env.DB_PASSWORD || !process.env.DB_NAME) {
+  throw new Error("Database connection parameters must be set. Check DB_HOST, DB_USER, DB_PASSWORD, and DB_NAME environment variables.");
 }
 
 export default defineConfig({
@@ -10,7 +10,11 @@ export default defineConfig({
   schema: "./shared/schema.ts",
   dialect: "mysql",
   dbCredentials: {
-    url: process.env.DATABASE_URL,
+    host: process.env.DB_HOST,
+    port: parseInt(process.env.DB_PORT || '3306'),
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_NAME,
   },
   verbose: true,
   strict: true,
