@@ -1,58 +1,59 @@
-import { pgTable, text, serial, integer, boolean, timestamp, numeric, uuid } from "drizzle-orm/pg-core";
+
+import { mysqlTable, text, int, boolean, timestamp, decimal, varchar } from "drizzle-orm/mysql-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-export const users = pgTable("users", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  username: text("username").notNull().unique(),
-  nickname: text("nickname").notNull().unique(),
-  email: text("email"),
-  authProvider: text("auth_provider").default("guest"),
-  balance: numeric("balance", { precision: 18, scale: 8 }).default("1337.50"),
+export const users = mysqlTable("users", {
+  id: varchar("id", { length: 36 }).primaryKey().$defaultFn(() => crypto.randomUUID()),
+  username: varchar("username", { length: 50 }).notNull().unique(),
+  nickname: varchar("nickname", { length: 50 }).notNull().unique(),
+  email: varchar("email", { length: 100 }),
+  authProvider: varchar("auth_provider", { length: 20 }).default("guest"),
+  balance: decimal("balance", { precision: 18, scale: 8 }).default("1337.50"),
   createdAt: timestamp("created_at").defaultNow(),
 });
  
-export const gameMatches = pgTable("game_matches", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  gameType: text("game_type").notNull(), // rps, tictactoe, sticks, hangman
-  stake: numeric("stake", { precision: 18, scale: 8 }).notNull(),
-  player1Id: uuid("player1_id").references(() => users.id),
-  player2Id: uuid("player2_id").references(() => users.id),
-  winnerId: uuid("winner_id").references(() => users.id),
-  state: text("state").default("waiting"), // waiting, in_progress, finished
-  gameData: text("game_data"), // JSON string for game-specific data
+export const gameMatches = mysqlTable("game_matches", {
+  id: varchar("id", { length: 36 }).primaryKey().$defaultFn(() => crypto.randomUUID()),
+  gameType: varchar("game_type", { length: 20 }).notNull(),
+  stake: decimal("stake", { precision: 18, scale: 8 }).notNull(),
+  player1Id: varchar("player1_id", { length: 36 }).references(() => users.id),
+  player2Id: varchar("player2_id", { length: 36 }).references(() => users.id),
+  winnerId: varchar("winner_id", { length: 36 }).references(() => users.id),
+  state: varchar("state", { length: 20 }).default("waiting"),
+  gameData: text("game_data"),
   createdAt: timestamp("created_at").defaultNow(),
   finishedAt: timestamp("finished_at"),
 });
 
-export const gameMoves = pgTable("game_moves", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  matchId: uuid("match_id").references(() => gameMatches.id),
-  playerId: uuid("player_id").references(() => users.id),
-  moveData: text("move_data").notNull(), // JSON string for move-specific data
-  moveNumber: integer("move_number").notNull(),
+export const gameMoves = mysqlTable("game_moves", {
+  id: varchar("id", { length: 36 }).primaryKey().$defaultFn(() => crypto.randomUUID()),
+  matchId: varchar("match_id", { length: 36 }).references(() => gameMatches.id),
+  playerId: varchar("player_id", { length: 36 }).references(() => users.id),
+  moveData: text("move_data").notNull(),
+  moveNumber: int("move_number").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-export const transactions = pgTable("transactions", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  userId: uuid("user_id").references(() => users.id),
-  type: text("type").notNull(), // deposit, withdraw, stake, win, lose
-  amount: numeric("amount", { precision: 18, scale: 8 }).notNull(),
-  status: text("status").default("completed"), // pending, completed, failed
+export const transactions = mysqlTable("transactions", {
+  id: varchar("id", { length: 36 }).primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: varchar("user_id", { length: 36 }).references(() => users.id),
+  type: varchar("type", { length: 20 }).notNull(),
+  amount: decimal("amount", { precision: 18, scale: 8 }).notNull(),
+  status: varchar("status", { length: 20 }).default("completed"),
   description: text("description"),
-  externalId: text("external_id"),
+  externalId: varchar("external_id", { length: 100 }),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-export const userStats = pgTable("user_stats", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  userId: uuid("user_id").references(() => users.id).unique(),
-  totalGames: integer("total_games").default(0),
-  totalWins: integer("total_wins").default(0),
-  totalLosses: integer("total_losses").default(0),
-  totalEarned: numeric("total_earned", { precision: 18, scale: 8 }).default("0"),
-  gamesPlayed: text("games_played").default("{}"), // JSON object with game type counts
+export const userStats = mysqlTable("user_stats", {
+  id: varchar("id", { length: 36 }).primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: varchar("user_id", { length: 36 }).references(() => users.id).unique(),
+  totalGames: int("total_games").default(0),
+  totalWins: int("total_wins").default(0),
+  totalLosses: int("total_losses").default(0),
+  totalEarned: decimal("total_earned", { precision: 18, scale: 8 }).default("0"),
+  gamesPlayed: text("games_played").default("{}"),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
