@@ -1,5 +1,9 @@
 
 import { defineConfig } from "drizzle-kit";
+import dotenv from 'dotenv';
+
+// Load environment variables
+dotenv.config();
 
 if (!process.env.DB_HOST || !process.env.DB_USER || !process.env.DB_PASSWORD || !process.env.DB_NAME) {
   throw new Error("Database connection parameters must be set. Check DB_HOST, DB_USER, DB_PASSWORD, and DB_NAME environment variables.");
