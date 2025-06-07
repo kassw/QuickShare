@@ -9,5 +9,18 @@ if (!process.env.DATABASE_URL) {
   );
 }
 
-export const connection = mysql.createPool(process.env.DATABASE_URL);
-export const db = drizzle(connection, { schema });
+// Configure MySQL connection pool with proper SSL settings
+export const connection = mysql.createPool({
+  uri: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false
+  },
+  connectionLimit: 10,
+  acquireTimeout: 60000,
+  timeout: 60000,
+});
+
+export const db = drizzle(connection, { 
+  schema,
+  mode: "default" // This fixes the Drizzle mode error
+});
