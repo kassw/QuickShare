@@ -28,10 +28,10 @@ export default function GameBoard({ gameType, gameState, serverGameState, onMove
       </motion.p>
       <div className="grid grid-cols-3 gap-6 max-w-md mx-auto">
         {[
-          { move: 'rock', icon: '✊', label: 'ROCK', color: 'retro-red' },
-          { move: 'paper', icon: '✋', label: 'PAPER', color: 'neon-green' },
-          { move: 'scissors', icon: '✌️', label: 'SCISSORS', color: 'retro-cyan' }
-        ].map(({ move, icon, label, color }, index) => (
+          { move: 'rock', icon: '✊',  color: 'retro-red' },
+          { move: 'paper', icon: '✋',  color: 'neon-green' },
+          { move: 'scissors', icon: '✌️',  color: 'retro-cyan' }
+        ].map(({ move, icon,  color }, index) => (
           <motion.div 
             key={move} 
             initial={{ opacity: 0, scale: 0.8, y: 20 }}
