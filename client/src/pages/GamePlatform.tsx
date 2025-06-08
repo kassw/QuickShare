@@ -306,7 +306,7 @@ export default function GamePlatform() {
           <div className="flex items-center space-x-3">
             <Gamepad2 className="text-neon-green text-2xl animate-float" />
             <h1 className="font-pixel text-neon-green text-xl md:text-2xl animate-glow">
-              RetroGame
+              BriSaKa
             </h1>
           </div>
           <div className="flex items-center space-x-4">
