@@ -410,7 +410,7 @@ export default function GamePlatform() {
                           <div className="mb-4">
                             <div className="w-full h-16 bg-retro-dark rounded-lg mb-4 flex items-center justify-center">
                               <div 
-                                className={`text-${data.color} w-10 h-10 place-items-center self-start`}
+                                className={`text-${data.color} w-10 h-10 place-items-center `}
                                 dangerouslySetInnerHTML={{ 
                                   __html: gameIcons[gameType as keyof typeof gameIcons] 
                                 }}
