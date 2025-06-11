@@ -621,10 +621,10 @@ export default function GamePlatform() {
                     </div>
                     <div>
                       <h4 className="font-pixel text-lg text-neon-green">
-                        {user?.nickname || 'Player1337'}
+                        NeoX
                       </h4>
-                      <p className="text-gray-400">{user?.email || 'guest@retrogame.com'}</p>
-                      <p className="text-xs text-gray-500">Member since Jan 2024</p>
+                      <p className="text-gray-400">NeoX@retrogame.com</p>
+                      <p className="text-xs text-gray-500">Member since Jun 2025</p>
                     </div>
                   </div>
 
